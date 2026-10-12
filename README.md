@@ -10,6 +10,32 @@ This public package addresses that problem by orchestrating a bounded verificati
 
 This repository focuses on workload orchestration, observation, and boundary contracts. It does not restore backups, manage volume snapshots, or recover storage systems, and it does not contain the proprietary evaluator decision implementation.
 
+## Current Public V1
+
+The current public baseline demonstrates:
+
+- validated, run-scoped verification requests;
+- isolated namespace orchestration;
+- approved Kubernetes workload application;
+- bounded readiness and HTTP responsiveness observations;
+- immutable operational observation projection;
+- delegation through an external RecoverabilityEvaluator protocol;
+- ownership-scoped cleanup attempts;
+- explicit primary and cleanup failure preservation;
+- tested package and distribution boundaries.
+
+This public V1 is an orchestration and observation platform. It does not restore backups, provision AWS infrastructure, include the production evaluator, or prove live-cluster recoverability.
+
+See [docs/public-roadmap.md](docs/public-roadmap.md) for high-level capability directions that are intentionally separated from implementation commitments.
+
+## Public Architecture
+
+![Brace Platform v1 public architecture](docs/assets/brace-platform-v1-public-architecture.png)
+
+The diagram is limited to capabilities present in the public package. See [Architecture](docs/architecture.md) for component-level detail and the [Verification matrix](docs/verification-matrix.md) for the evidence and limitations behind each claim.
+
+*Public package boundary. The production evaluator and backup restoration mechanisms are not included.*
+
 ## What the public repository demonstrates
 
 - **Workload application and observation, not backup restoration** — the platform applies and observes an approved workload bundle (Deployment, Service, ConfigMap); it does not implement backup restoration, volume snapshots, or storage recovery.
@@ -85,6 +111,8 @@ Verified public behavior:
   high-level deployment context and its separation from the public package.
 - [Architecture](docs/architecture.md): review component responsibilities
   and the external evaluator boundary.
+- [Public capability roadmap](docs/public-roadmap.md): review the capability
+  horizons and the product boundaries that keep Brace focused.
 
 The walkthrough uses in-process test doubles. It does not restore a backup,
 contact a live cluster, or include a recoverability decision algorithm.

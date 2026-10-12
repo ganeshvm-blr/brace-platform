@@ -1,0 +1,377 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 2400 1350" width="2400" height="1350">
+  <defs>
+    <style>
+      .bg { fill: #f8fafc; }
+      .header-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 40px; font-weight: 800; fill: #0f172a; letter-spacing: -0.5px; }
+      .header-subtitle { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 500; fill: #475569; }
+      .zone-bg { fill: #ffffff; stroke: #e2e8f0; stroke-width: 2; rx: 12; }
+      .zone-num { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 14px; font-weight: 700; fill: #2563eb; letter-spacing: 0.5px; }
+      .zone-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 20px; font-weight: 700; fill: #0f172a; }
+      .zone-caption { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 400; fill: #64748b; }
+
+      .card-blue { fill: #f0f7ff; stroke: #bfdbfe; stroke-width: 1.5; rx: 8; }
+      .card-purple { fill: #faf5ff; stroke: #e9d5ff; stroke-width: 1.5; rx: 8; }
+      .card-green { fill: #f0fdf4; stroke: #bbf7d0; stroke-width: 1.5; rx: 8; }
+      .card-slate { fill: #f8fafc; stroke: #e2e8f0; stroke-width: 1.5; rx: 8; }
+
+      .card-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 15px; font-weight: 700; fill: #1e293b; }
+      .card-desc { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; fill: #475569; }
+      .card-tag { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 11px; font-weight: 600; fill: #64748b; text-transform: uppercase; letter-spacing: 0.5px; }
+
+      .boundary-box { fill: none; stroke: #a855f7; stroke-width: 2; stroke-dasharray: 6 6; rx: 8; }
+      .boundary-label { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 12px; font-weight: 700; fill: #7e22ce; letter-spacing: 0.5px; }
+
+      .note-text { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 600; fill: #b45309; }
+      .strip-title { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 16px; font-weight: 700; fill: #0f172a; }
+      .strip-item { font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial, sans-serif; font-size: 13px; font-weight: 500; fill: #334155; }
+
+      .flow-arrow { stroke: #3b82f6; stroke-width: 2.5; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .flow-head { fill: #3b82f6; }
+      .return-arrow { stroke: #8b5cf6; stroke-width: 2; stroke-dasharray: 4 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .return-head { fill: #8b5cf6; }
+      .warn-arrow { stroke: #f59e0b; stroke-width: 2; stroke-dasharray: 4 4; fill: none; stroke-linecap: round; stroke-linejoin: round; }
+      .warn-head { fill: #f59e0b; }
+    </style>
+
+    <marker id="arrow-blue" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" class="flow-head" />
+    </marker>
+    <marker id="arrow-purple" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" class="return-head" />
+    </marker>
+    <marker id="arrow-warn" viewBox="0 0 10 10" refX="8" refY="5" markerWidth="6" markerHeight="6" orient="auto-start-reverse">
+      <path d="M 0 1 L 10 5 L 0 9 z" class="warn-head" />
+    </marker>
+  </defs>
+
+  <!-- Canvas Background -->
+  <rect width="2400" height="1350" class="bg" />
+
+  <!-- Header Area -->
+  <g transform="translate(60, 45)">
+    <text x="0" y="40" class="header-title">Brace Platform v1 - Public Architecture</text>
+    <text x="0" y="72" class="header-subtitle">Kubernetes workload verification with an external evaluator boundary</text>
+
+    <!-- Explicit Public Limitation Banner -->
+    <g transform="translate(1420, 10)">
+      <rect width="860" height="65" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5" rx="8" />
+      <text x="24" y="28" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="12px" font-weight="700" fill="#b45309" letter-spacing="0.5px">EXECUTION &amp; VERIFICATION BOUNDARY</text>
+      <text x="24" y="50" font-family="-apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif" font-size="14px" font-weight="600" fill="#92400e">Public tests use in-process test doubles. No live-cluster proof.</text>
+    </g>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 1: VERIFIED INPUT -->
+  <!-- ========================================================================= -->
+  <g transform="translate(60, 150)">
+    <rect width="400" height="820" class="zone-bg" />
+    <text x="30" y="42" class="zone-num">ZONE 1</text>
+    <text x="30" y="70" class="zone-title">VERIFIED INPUT</text>
+    <text x="30" y="98" class="zone-caption">Validated prior to any operational I/O</text>
+
+    <!-- Card 1.1 -->
+    <g transform="translate(30, 130)">
+      <rect width="340" height="150" class="card-slate" />
+      <text x="24" y="36" class="card-tag">Request Contract</text>
+      <text x="24" y="66" class="card-title">Validated Verification Request</text>
+      <text x="24" y="96" class="card-desc">Strict structural schema parsing</text>
+      <text x="24" y="122" class="card-desc">Digest pinning (@sha256:64 hex)</text>
+    </g>
+
+    <!-- Card 1.2 -->
+    <g transform="translate(30, 310)">
+      <rect width="340" height="150" class="card-slate" />
+      <text x="24" y="36" class="card-tag">Identity Binding</text>
+      <text x="24" y="66" class="card-title">Run and Workload Identity</text>
+      <text x="24" y="96" class="card-desc">Deterministic run-scoped identities</text>
+      <text x="24" y="122" class="card-desc">Explicit ownership attribution</text>
+    </g>
+
+    <!-- Card 1.3 -->
+    <g transform="translate(30, 490)">
+      <rect width="340" height="150" class="card-slate" />
+      <text x="24" y="36" class="card-tag">Workload Specification</text>
+      <text x="24" y="66" class="card-title">Approved Workload Bundle</text>
+      <text x="24" y="96" class="card-desc">Deployment, Service, and ConfigMap</text>
+      <text x="24" y="122" class="card-desc">Exact port, replica, and label rules</text>
+    </g>
+
+    <!-- Caption Card -->
+    <g transform="translate(30, 680)">
+      <rect width="340" height="100" fill="#f8fafc" stroke="#cbd5e1" stroke-width="1" rx="6" />
+      <text x="20" y="38" class="card-tag">Validation Guarantee</text>
+      <text x="20" y="62" class="card-desc">Input and cross-field consistency are</text>
+      <text x="20" y="82" class="card-desc">validated before operational execution.</text>
+    </g>
+  </g>
+
+  <!-- Arrow from Zone 1 to Zone 2 -->
+  <path d="M 460 520 L 515 520" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 2: PUBLIC PLATFORM -->
+  <!-- ========================================================================= -->
+  <g transform="translate(520, 150)">
+    <rect width="1340" height="420" class="zone-bg" />
+    <text x="30" y="42" class="zone-num">ZONE 2</text>
+    <text x="30" y="70" class="zone-title">PUBLIC PLATFORM</text>
+    <text x="30" y="98" class="zone-caption">Sequential operational orchestration and immutable observation projection</text>
+
+    <!-- Stage 1: Request Validation -->
+    <g transform="translate(30, 130)">
+      <rect width="190" height="240" class="card-blue" />
+      <text x="16" y="30" class="card-tag">Phase 0</text>
+      <text x="16" y="58" class="card-title">Request</text>
+      <text x="16" y="80" class="card-title">Validation</text>
+      <line x1="16" y1="96" x2="174" y2="96" stroke="#bfdbfe" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Run, workload,</text>
+      <text x="16" y="144" class="card-desc">event, ownership,</text>
+      <text x="16" y="166" class="card-desc">and bundle</text>
+      <text x="16" y="188" class="card-desc">consistency</text>
+    </g>
+
+    <path d="M 220 250 L 245 250" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Stage 2: Run-Scoped Namespace -->
+    <g transform="translate(250, 130)">
+      <rect width="190" height="240" class="card-blue" />
+      <text x="16" y="30" class="card-tag">Phase 1</text>
+      <text x="16" y="58" class="card-title">Run-Scoped</text>
+      <text x="16" y="80" class="card-title">Namespace</text>
+      <line x1="16" y1="96" x2="174" y2="96" stroke="#bfdbfe" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Isolated</text>
+      <text x="16" y="144" class="card-desc">execution</text>
+      <text x="16" y="166" class="card-desc">boundary</text>
+    </g>
+
+    <path d="M 440 250 L 465 250" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Stage 3: Workload Application -->
+    <g transform="translate(470, 130)">
+      <rect width="190" height="240" class="card-blue" />
+      <text x="16" y="30" class="card-tag">Phase 2</text>
+      <text x="16" y="58" class="card-title">Workload</text>
+      <text x="16" y="80" class="card-title">Application</text>
+      <line x1="16" y1="96" x2="174" y2="96" stroke="#bfdbfe" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Deployment,</text>
+      <text x="16" y="144" class="card-desc">Service, and</text>
+      <text x="16" y="166" class="card-desc">optional</text>
+      <text x="16" y="188" class="card-desc">ConfigMap</text>
+    </g>
+
+    <path d="M 660 250 L 685 250" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Stage 4: Readiness Observation -->
+    <g transform="translate(690, 130)">
+      <rect width="190" height="240" class="card-blue" />
+      <text x="16" y="30" class="card-tag">Phase 3</text>
+      <text x="16" y="58" class="card-title">Readiness</text>
+      <text x="16" y="80" class="card-title">Observation</text>
+      <line x1="16" y1="96" x2="174" y2="96" stroke="#bfdbfe" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Bounded</text>
+      <text x="16" y="144" class="card-desc">readiness</text>
+      <text x="16" y="166" class="card-desc">sampling</text>
+    </g>
+
+    <path d="M 880 250 L 905 250" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Stage 5: HTTP Responsiveness Observation -->
+    <g transform="translate(910, 130)">
+      <rect width="190" height="240" class="card-blue" />
+      <text x="16" y="30" class="card-tag">Phase 4</text>
+      <text x="16" y="58" class="card-title">HTTP Respon-</text>
+      <text x="16" y="80" class="card-title">siveness</text>
+      <line x1="16" y1="96" x2="174" y2="96" stroke="#bfdbfe" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Bounded</text>
+      <text x="16" y="144" class="card-desc">application</text>
+      <text x="16" y="166" class="card-desc">endpoint</text>
+      <text x="16" y="188" class="card-desc">sampling</text>
+    </g>
+
+    <path d="M 1100 250 L 1125 250" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Stage 6: Observation Projection -->
+    <g transform="translate(1130, 130)">
+      <rect width="180" height="240" class="card-green" />
+      <text x="16" y="30" class="card-tag">Phase 5</text>
+      <text x="16" y="58" class="card-title">Observation</text>
+      <text x="16" y="80" class="card-title">Projection</text>
+      <line x1="16" y1="96" x2="164" y2="96" stroke="#bbf7d0" stroke-width="1" />
+      <text x="16" y="122" class="card-desc">Immutable</text>
+      <text x="16" y="144" class="card-desc">operational</text>
+      <text x="16" y="166" class="card-desc">observations</text>
+    </g>
+  </g>
+
+  <!-- Flow connecting Zone 2 Stage 6 down into Zone 3 -->
+  <path d="M 1740 570 L 1740 600 L 2110 600 L 2110 635" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+  <!-- Flow connecting Zone 2 Stage 2 down to Zone 4 Cleanup -->
+  <path d="M 865 570 L 865 635" class="warn-arrow" marker-end="url(#arrow-warn)" />
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 3: EXTERNAL DECISION BOUNDARY -->
+  <!-- ========================================================================= -->
+  <g transform="translate(1890, 150)">
+    <rect width="450" height="820" class="zone-bg" />
+    <text x="30" y="42" class="zone-num">ZONE 3</text>
+    <text x="30" y="70" class="zone-title">EXTERNAL BOUNDARY</text>
+    <text x="30" y="98" class="zone-caption">Opaque evaluation protocol handoff</text>
+
+    <!-- Boundary Demarcation -->
+    <rect x="25" y="130" width="400" height="650" class="boundary-box" />
+    <text x="45" y="160" class="boundary-label">PLUGGABLE REASONING BOUNDARY</text>
+
+    <!-- Sub-card 3.1: Protocol Contract -->
+    <g transform="translate(45, 180)">
+      <rect width="360" height="130" class="card-purple" />
+      <text x="20" y="32" class="card-tag">Protocol Contract</text>
+      <text x="20" y="60" class="card-title">RecoverabilityEvaluator Protocol</text>
+      <text x="20" y="88" class="card-desc">Handoff of immutable observations</text>
+      <text x="20" y="110" class="card-desc">Structural EvaluationRequest input</text>
+    </g>
+
+    <!-- Arrow down to evaluator -->
+    <path d="M 225 310 L 225 345" class="flow-arrow" marker-end="url(#arrow-blue)" />
+
+    <!-- Sub-card 3.2: External Evaluator -->
+    <g transform="translate(45, 350)">
+      <rect width="360" height="190" class="card-purple" />
+      <text x="20" y="32" class="card-tag">External Decision</text>
+      <text x="20" y="60" class="card-title">External Evaluator</text>
+      <line x1="20" y1="74" x2="340" y2="74" stroke="#e9d5ff" stroke-width="1" />
+      <text x="20" y="100" class="card-title" fill="#7e22ce">External implementation</text>
+      <text x="20" y="124" class="card-title" fill="#7e22ce">Not included in this repository</text>
+      <text x="20" y="154" class="card-desc">Dependency injection interface;</text>
+      <text x="20" y="174" class="card-desc">raises ReasoningCoreNotProvided if None</text>
+    </g>
+
+    <!-- Return arrow -->
+    <path d="M 225 540 L 225 575" class="return-arrow" marker-end="url(#arrow-purple)" />
+
+    <!-- Sub-card 3.3: Return Result -->
+    <g transform="translate(45, 580)">
+      <rect width="360" height="120" class="card-green" />
+      <text x="20" y="32" class="card-tag">Evaluation Handoff</text>
+      <text x="20" y="60" class="card-title">RecoverabilityKnowledge Result</text>
+      <text x="20" y="88" class="card-desc">Returned across the boundary</text>
+      <text x="20" y="108" class="card-desc">Preserved on coordinator completion</text>
+    </g>
+  </g>
+
+  <!-- Return Flow from Zone 3 to Zone 4 Outcome -->
+  <path d="M 1890 800 L 1800 800" class="return-arrow" marker-end="url(#arrow-purple)" />
+
+  <!-- ========================================================================= -->
+  <!-- ZONE 4: LIFECYCLE OUTCOME -->
+  <!-- ========================================================================= -->
+  <g transform="translate(520, 600)">
+    <rect width="1340" height="370" class="zone-bg" />
+    <text x="30" y="42" class="zone-num">ZONE 4</text>
+    <text x="30" y="70" class="zone-title">LIFECYCLE OUTCOME</text>
+    <text x="30" y="98" class="zone-caption">Explicit phase execution recording, failure preservation, and cleanup</text>
+
+    <!-- Item 1: Phase-Aware Record -->
+    <g transform="translate(30, 130)">
+      <rect width="230" height="150" class="card-slate" />
+      <text x="16" y="30" class="card-tag">Execution Telemetry</text>
+      <text x="16" y="58" class="card-title">Phase-Aware Record</text>
+      <text x="16" y="88" class="card-desc">Structured recording of</text>
+      <text x="16" y="110" class="card-desc">every lifecycle phase</text>
+      <text x="16" y="132" class="card-desc">(ExecutionPhaseResult)</text>
+    </g>
+
+    <!-- Item 2: Failure Preservation -->
+    <g transform="translate(285, 130)">
+      <rect width="230" height="150" class="card-slate" />
+      <text x="16" y="30" class="card-tag">Robust Diagnostics</text>
+      <text x="16" y="58" class="card-title">Failure Preservation</text>
+      <text x="16" y="88" class="card-desc">Primary failure retained</text>
+      <text x="16" y="110" class="card-desc">Cleanup failure retained</text>
+      <text x="16" y="132" class="card-desc">No masked exceptions</text>
+    </g>
+
+    <!-- Item 3: Ownership-Scoped Cleanup Attempt -->
+    <g transform="translate(540, 130)">
+      <rect width="250" height="150" class="card-slate" stroke="#fcd34d" />
+      <text x="16" y="30" class="card-tag" fill="#d97706">Resource Teardown</text>
+      <text x="16" y="58" class="card-title">Ownership-Scoped</text>
+      <text x="16" y="80" class="card-title">Cleanup Attempt</text>
+      <text x="16" y="110" class="card-desc">Targeted namespace removal</text>
+      <text x="16" y="132" class="card-desc">Attempted on success &amp; failure</text>
+    </g>
+
+    <!-- Item 4: Package & CI Verification -->
+    <g transform="translate(815, 130)">
+      <rect width="230" height="150" class="card-slate" />
+      <text x="16" y="30" class="card-tag">Distribution Integrity</text>
+      <text x="16" y="58" class="card-title">Package &amp; CI Checks</text>
+      <text x="16" y="88" class="card-desc">Import/dependency closure</text>
+      <text x="16" y="110" class="card-desc">Fresh-install verification</text>
+      <text x="16" y="132" class="card-desc">Standard distribution build</text>
+    </g>
+
+    <!-- Item 5: Boundary Note Card -->
+    <g transform="translate(1070, 130)">
+      <rect width="240" height="150" fill="#fffbeb" stroke="#fcd34d" stroke-width="1.5" rx="8" />
+      <text x="16" y="30" class="card-tag" fill="#b45309">Critical Boundary Note</text>
+      <text x="16" y="58" class="note-text">Cleanup is attempted.</text>
+      <text x="16" y="80" class="note-text">Public tests do not prove</text>
+      <text x="16" y="102" class="note-text">live resource absence.</text>
+      <text x="16" y="132" class="card-desc" fill="#92400e">Test doubles used in suite</text>
+    </g>
+
+    <!-- Bottom strip inside zone 4 -->
+    <text x="30" y="325" class="card-desc" fill="#64748b">Applicable success and failure paths trigger ownership-scoped cleanup while preserving original phase and failure details.</text>
+  </g>
+
+  <!-- ========================================================================= -->
+  <!-- FULL-WIDTH LOWER STRIP -->
+  <!-- ========================================================================= -->
+  <g transform="translate(60, 1000)">
+    <rect width="2280" height="290" class="zone-bg" />
+
+    <!-- Column 1: CURRENT PUBLIC V1 -->
+    <g transform="translate(40, 30)">
+      <rect width="690" height="230" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="8" />
+      <text x="24" y="36" class="strip-title" fill="#0369a1">CURRENT PUBLIC V1</text>
+      <line x1="24" y1="48" x2="666" y2="48" stroke="#e2e8f0" stroke-width="1" />
+      <text x="24" y="78" class="strip-item">&#x2022; Run-scoped orchestration</text>
+      <text x="24" y="104" class="strip-item">&#x2022; Kubernetes workload application</text>
+      <text x="24" y="130" class="strip-item">&#x2022; Readiness observation</text>
+      <text x="24" y="156" class="strip-item">&#x2022; HTTP responsiveness observation</text>
+      <text x="360" y="78" class="strip-item">&#x2022; Immutable operational observations</text>
+      <text x="360" y="104" class="strip-item">&#x2022; External evaluator boundary</text>
+      <text x="360" y="130" class="strip-item">&#x2022; Explicit failure semantics</text>
+      <text x="360" y="156" class="strip-item">&#x2022; Package and CI verification</text>
+    </g>
+
+    <!-- Column 2: NOT IN PUBLIC V1 -->
+    <g transform="translate(795, 30)">
+      <rect width="690" height="230" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="8" />
+      <text x="24" y="36" class="strip-title" fill="#b91c1c">NOT IN PUBLIC V1</text>
+      <line x1="24" y1="48" x2="666" y2="48" stroke="#e2e8f0" stroke-width="1" />
+      <text x="24" y="78" class="strip-item">&#x2022; Backup restoration</text>
+      <text x="24" y="104" class="strip-item">&#x2022; AWS infrastructure provisioning</text>
+      <text x="24" y="130" class="strip-item">&#x2022; Continuous or scheduled verification</text>
+      <text x="24" y="156" class="strip-item">&#x2022; Fleet management</text>
+      <text x="360" y="78" class="strip-item">&#x2022; Enterprise tenancy and RBAC</text>
+      <text x="360" y="104" class="strip-item">&#x2022; Production evaluator implementation</text>
+      <text x="360" y="130" class="strip-item">&#x2022; Live-cluster proof</text>
+      <text x="360" y="156" class="strip-item">&#x2022; RTO or RPO certification</text>
+    </g>
+
+    <!-- Column 3: ARCHITECTURAL PRINCIPLES -->
+    <g transform="translate(1550, 30)">
+      <rect width="690" height="230" fill="#f8fafc" stroke="#e2e8f0" stroke-width="1" rx="8" />
+      <text x="24" y="36" class="strip-title" fill="#15803d">ARCHITECTURAL PRINCIPLES</text>
+      <line x1="24" y1="48" x2="666" y2="48" stroke="#e2e8f0" stroke-width="1" />
+      <text x="24" y="78" class="strip-item">&#x2022; Observation before decision</text>
+      <text x="24" y="104" class="strip-item">&#x2022; Explicit identity continuity</text>
+      <text x="24" y="130" class="strip-item">&#x2022; Bounded operational behavior</text>
+      <text x="360" y="78" class="strip-item">&#x2022; Failures remain observable</text>
+      <text x="360" y="104" class="strip-item">&#x2022; Cleanup attempts are explicit</text>
+      <text x="360" y="130" class="strip-item">&#x2022; Public platform, external evaluator</text>
+    </g>
+  </g>
+</svg>

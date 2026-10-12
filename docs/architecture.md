@@ -6,6 +6,35 @@ This document describes the public architecture of Brace Platform: a Kubernetes 
 
 The platform's responsibility ends where decision making begins. Brace Platform executes and observes an isolated Kubernetes namespace per run, applies an approved workload bundle, projects operational results into immutable observations, and presents those observations to an injected evaluator through a defined protocol. The public platform does not implement backup restoration, volume snapshot restores, or database state recovery. Every public platform component described here is implemented in the current repository. Reaching an authoritative recoverability conclusion requires an injected `RecoverabilityEvaluator`, whose implementation is external by design.
 
+## Public V1 Architecture at a Glance
+
+```mermaid
+flowchart LR
+    Request["Validated verification request"]
+    Namespace["Run-scoped namespace"]
+    Workload["Approved workload bundle"]
+    Ready["Readiness observation"]
+    Responsive["HTTP responsiveness observation"]
+    Projection["Immutable operational observations"]
+    Boundary["RecoverabilityEvaluator protocol"]
+    Evaluator["External evaluator"]
+    Cleanup["Ownership-scoped cleanup attempt"]
+
+    Request --> Namespace
+    Namespace --> Workload
+    Workload --> Ready
+    Ready --> Responsive
+    Responsive --> Projection
+    Projection --> Boundary
+    Boundary --> Evaluator
+
+    Namespace -. applicable success or failure path .-> Cleanup
+```
+
+The diagram describes the public package boundary. Public tests use in-process test doubles. The diagram does not represent backup restoration or live-cluster proof. Cleanup is attempted and failures are preserved; resource absence is not proven by the public tests.
+
+For a presentation-oriented view of the same public boundary, see the [public architecture graphic](assets/brace-platform-v1-public-architecture.png).
+
 ## 2. Public system boundary
 
 The system is split along one intentional boundary.
@@ -169,7 +198,7 @@ The test suite (`tests/`) is structured in three layers:
 - **Composition tests** (`test_runtime_owned_composition.py`) — cover the public entry point: exact evaluator threading, the full success path with an injected evaluator, the no-evaluator path through the real boundary with cleanup, and evaluator forwarding.
 - **Packaging guards** (`test_package_installation.py`) — verify pyproject metadata, dependency/import closure, absence of private references in packaging files, and the src discovery layout.
 
-Tests never contact a Kubernetes cluster: adapters and observers are fakes, and the composition patching covers config loading and client construction. These in-process fake-based tests verify coordinator authority and failure paths, but do not constitute live-cluster operational proof. The suite currently passes **38 tests**.
+Tests never contact a Kubernetes cluster: adapters and observers are fakes, and the composition patching covers config loading and client construction. These in-process fake-based tests verify coordinator authority and failure paths, but do not constitute live-cluster operational proof. The suite currently passes **39 tests**.
 
 ## 11. Security and disclosure posture
 
