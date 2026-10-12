@@ -2,9 +2,13 @@
 
 [![CI](https://github.com/ganeshvm-blr/brace-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ganeshvm-blr/brace-platform/actions/workflows/ci.yml)
 
-Brace Platform is a Kubernetes recoverability-verification orchestration platform with a pluggable reasoning boundary. It executes and observes an isolated Kubernetes namespace per verification run, projects the results into immutable operational observations, and hands those observations across a defined boundary to an injected `RecoverabilityEvaluator`. The platform is responsible for execution, observation, evidence projection, lifecycle safety, and boundary design; the recoverability decision itself is made by the injected evaluator.
+Brace Platform orchestrates isolated Kubernetes verification runs to observe application workloads and deliver structured evidence across a pluggable decision boundary.
 
-This repository is the public platform implementation. The proprietary evaluator implementation is intentionally not distributed with it.
+In disaster recovery and platform operations, teams often confirm that Kubernetes resources were applied successfully without verifying that the application became ready and responsive. Declaring an environment recoverable based solely on manifest creation leaves operational gaps when workloads crash, fail health probes, or experience connectivity failures.
+
+This public package addresses that problem by orchestrating a bounded verification run: it creates a run-scoped namespace, applies an approved workload bundle (Deployment, Service, and ConfigMap), observes Kubernetes readiness within bounded deadlines, probes HTTP responsiveness, projects results into immutable operational observations, delegates evaluation to an external `RecoverabilityEvaluator`, and attempts ownership-scoped cleanup.
+
+This repository focuses on workload orchestration, observation, and boundary contracts. It does not restore backups, manage volume snapshots, or recover storage systems, and it does not contain the proprietary evaluator decision implementation.
 
 ## What the public repository demonstrates
 
@@ -77,6 +81,8 @@ Verified public behavior:
   validation, failure handling, and cleanup through executable tests.
 - [Verification matrix](docs/verification-matrix.md): map public claims to
   evidence and understand their limits.
+- [AWS deployment case study](docs/aws-case-study.md): review a sanitized,
+  high-level deployment context and its separation from the public package.
 - [Architecture](docs/architecture.md): review component responsibilities
   and the external evaluator boundary.
 
