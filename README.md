@@ -1,5 +1,7 @@
 # Brace Platform
 
+[![CI](https://github.com/ganeshvm-blr/brace-platform/actions/workflows/ci.yml/badge.svg?branch=main)](https://github.com/ganeshvm-blr/brace-platform/actions/workflows/ci.yml)
+
 Brace Platform is a Kubernetes recoverability-verification orchestration platform with a pluggable reasoning boundary. It executes and observes an isolated Kubernetes namespace per verification run, projects the results into immutable operational observations, and hands those observations across a defined boundary to an injected `RecoverabilityEvaluator`. The platform is responsible for execution, observation, evidence projection, lifecycle safety, and boundary design; the recoverability decision itself is made by the injected evaluator.
 
 This repository is the public platform implementation. The proprietary evaluator implementation is intentionally not distributed with it.
@@ -69,6 +71,18 @@ Verified public behavior:
 - a successful evaluation followed by a cleanup failure raises `VerificationCleanupFailed`, preserving the produced knowledge, observations, and phase record;
 - evaluator absence surfaces as `ReasoningCoreNotProvided` inside `VerificationCoordinationFailed` at the `reasoning_boundary` phase.
 
+## Explore the Engineering
+
+- [Five-minute walkthrough](docs/demo.md): follow orchestration, boundary
+  validation, failure handling, and cleanup through executable tests.
+- [Verification matrix](docs/verification-matrix.md): map public claims to
+  evidence and understand their limits.
+- [Architecture](docs/architecture.md): review component responsibilities
+  and the external evaluator boundary.
+
+The walkthrough uses in-process test doubles. It does not restore a backup,
+contact a live cluster, or include a recoverability decision algorithm.
+
 ## Installation
 
 The package metadata requires Python >= 3.10.
@@ -86,7 +100,7 @@ python -m pip install -e ".[dev]"
 python -m pytest tests -v -p no:cacheprovider
 ```
 
-Current verified result: **38 tests passed**.
+Current verified local result: **39 tests passed on Python 3.14.6**.
 
 The public audit also verified packaging with:
 
