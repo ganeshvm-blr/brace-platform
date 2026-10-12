@@ -198,7 +198,7 @@ The test suite (`tests/`) is structured in three layers:
 - **Composition tests** (`test_runtime_owned_composition.py`) — cover the public entry point: exact evaluator threading, the full success path with an injected evaluator, the no-evaluator path through the real boundary with cleanup, and evaluator forwarding.
 - **Packaging guards** (`test_package_installation.py`) — verify pyproject metadata, dependency/import closure, absence of private references in packaging files, and the src discovery layout.
 
-Tests never contact a Kubernetes cluster: adapters and observers are fakes, and the composition patching covers config loading and client construction. These in-process fake-based tests verify coordinator authority and failure paths, but do not constitute live-cluster operational proof. The suite currently passes **39 tests**.
+Tests never contact a Kubernetes cluster: adapters and observers are fakes, and the composition patching covers config loading and client construction. These in-process fake-based tests verify coordinator authority and failure paths, but do not constitute live-cluster operational proof. The suite currently passes **42 tests**.
 
 ## 11. Security and disclosure posture
 

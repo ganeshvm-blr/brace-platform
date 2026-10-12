@@ -62,6 +62,7 @@ jobs:
                   "_runtime_owned_request.py",
                   "_runtime_owned_verification.py",
                   "_workload.py",
+                  "demo.py",
                   "reasoning/__init__.py",
                   "reasoning/boundary.py",
               }
@@ -162,6 +163,7 @@ jobs:
               "brace._runtime_owned_request",
               "brace._runtime_owned_verification",
               "brace._workload",
+              "brace.demo",
               "brace.reasoning",
               "brace.reasoning.boundary",
           ]
@@ -236,6 +238,7 @@ jobs:
               "brace/_runtime_owned_request.py",
               "brace/_runtime_owned_verification.py",
               "brace/_workload.py",
+              "brace/demo.py",
               "brace/reasoning/__init__.py",
               "brace/reasoning/boundary.py",
           ]

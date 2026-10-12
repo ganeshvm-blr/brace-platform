@@ -9,6 +9,52 @@ This document provides a timed, five-minute engineering walkthrough of Brace Pla
 > - Operational phase execution success indicates that an infrastructure lifecycle phase ran without an unhandled error; it is not necessarily a positive observation outcome.
 > - No production evaluator or recoverability decision algorithm is included in this public repository.
 
+## One-Command Demonstration
+
+For an immediate local simulation of the public coordination chain from a clean clone without running individual test cases:
+
+```bash
+python -m brace.demo
+```
+
+This command executes the public coordination chain locally using in-process test doubles:
+- request and identity validation;
+- isolated namespace orchestration and workload application through test doubles;
+- simulated Kubernetes readiness and HTTP responsiveness observation;
+- operational observation projection into immutable evidence records;
+- evaluator protocol boundary handoff (`DemoRecoverabilityEvaluator`);
+- cleanup orchestration through test doubles.
+
+```text
+====================================================
+Brace Platform v1 Public Demonstration
+====================================================
+
+[PASS] Request and identity validation
+[PASS] Namespace lifecycle orchestration through test double
+[PASS] Workload application through test double
+[PASS] Simulated readiness observation
+[PASS] Simulated HTTP responsiveness observation
+[PASS] Operational observation projection
+[PASS] External evaluator protocol handoff
+[PASS] Cleanup orchestration through test double
+
+Demo result:
+Affirmed standing returned by the public demo evaluator test double.
+No production recoverability decision was made.
+
+Important:
+This demonstration uses in-process test doubles.
+No live Kubernetes cluster was contacted.
+No backup restoration was performed.
+No AWS resources were created.
+No network request was made.
+
+====================================================
+```
+
+The sections below step through each lifecycle phase in detail with corresponding unit test assertions.
+
 ---
 
 ## Walkthrough Summary
@@ -124,7 +170,7 @@ All packaging tests pass, confirming metadata validity, dependency closure, and 
 
 ## Running the Complete Suite
 
-To execute all 39 tests across the public platform:
+To execute all 42 tests across the public platform:
 
 ```bash
 python -m pytest tests -v -p no:cacheprovider
@@ -132,5 +178,5 @@ python -m pytest tests -v -p no:cacheprovider
 
 Expected result:
 ```text
-39 passed; execution time varies.
+42 passed; execution time varies.
 ```

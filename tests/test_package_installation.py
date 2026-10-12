@@ -111,7 +111,7 @@ def test_source_layout_matches_discovery_root():
     assert (_REPO_ROOT / "src").is_dir()
     assert (_SRC_BRACE / "__init__.py").is_file()
     assert all(
-        rel in {"__init__.py", "reasoning/__init__.py", "reasoning/boundary.py"}
+        rel in {"__init__.py", "demo.py", "reasoning/__init__.py", "reasoning/boundary.py"}
         or rel.startswith("_")
         for module in _retained_modules()
         for rel in (module.relative_to(_SRC_BRACE).as_posix(),)

@@ -28,6 +28,60 @@ This public V1 is an orchestration and observation platform. It does not restore
 
 See [docs/public-roadmap.md](docs/public-roadmap.md) for high-level capability directions that are intentionally separated from implementation commitments.
 
+## Quick Demo
+
+Run the local simulation of the public coordination chain from a clean clone:
+
+```bash
+git clone https://github.com/ganeshvm-blr/brace-platform.git
+cd brace-platform
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -c constraints.txt -e ".[dev]"
+python -m brace.demo
+```
+
+Output:
+
+```text
+====================================================
+Brace Platform v1 Public Demonstration
+====================================================
+
+[PASS] Request and identity validation
+[PASS] Namespace lifecycle orchestration through test double
+[PASS] Workload application through test double
+[PASS] Simulated readiness observation
+[PASS] Simulated HTTP responsiveness observation
+[PASS] Operational observation projection
+[PASS] External evaluator protocol handoff
+[PASS] Cleanup orchestration through test double
+
+Demo result:
+Affirmed standing returned by the public demo evaluator test double.
+No production recoverability decision was made.
+
+Important:
+This demonstration uses in-process test doubles.
+No live Kubernetes cluster was contacted.
+No backup restoration was performed.
+No AWS resources were created.
+No network request was made.
+
+====================================================
+```
+
+Important boundaries:
+- Uses in-process test doubles for namespace and workload adapters, observers, and evaluators.
+- No live Kubernetes cluster is contacted.
+- No backup restoration is performed.
+- No AWS resources are created.
+- No network request was made.
+- The demonstration evaluator is a presentation test double returning fixed affirmed standing; it contains no proprietary reasoning logic, rules, scoring, evidence interpretation, thresholds, or decision pipeline.
+
+See [docs/demo.md](docs/demo.md) for the detailed five-minute engineering walkthrough.
+
 ## Public Architecture
 
 ![Brace Platform v1 public architecture](docs/assets/brace-platform-v1-public-architecture.png)
@@ -134,7 +188,7 @@ python -m pip install -e ".[dev]"
 python -m pytest tests -v -p no:cacheprovider
 ```
 
-Current verified local result: **39 tests passed on Python 3.14.6**.
+Current verified local result: **42 tests passed on Python 3.14.6**.
 
 The public audit also verified packaging with:
 

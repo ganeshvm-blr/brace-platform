@@ -60,7 +60,7 @@ The following claims are explicitly outside the scope of Brace Platform:
    The platform applies an approved workload bundle to an isolated namespace and observes its behavior. It does not perform volume restores, snapshot recoveries, database replays, or storage system restorations.
 
 2. **No Live Cluster Proof from Unit Tests**:
-   The 39 unit tests pass against in-process fakes. These tests prove coordinator state machine transitions, failure preservation, and boundary invariants; they do not constitute proof of live Kubernetes cluster functionality.
+   The 42 unit tests pass against in-process fakes. These tests prove coordinator state machine transitions, failure preservation, and boundary invariants; they do not constitute proof of live Kubernetes cluster functionality.
 
 3. **Phase Success Is Not Observation Outcome**:
    A phase result recording `succeeded=True` indicates that the orchestration phase ran without an unhandled runtime error. It is distinct from whether the observed check condition evaluated to an affirmative or negative result.
