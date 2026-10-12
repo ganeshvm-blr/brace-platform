@@ -1,0 +1,8 @@
+# Direct dependency constraints for the tested environment.
+# Tested with the active local environment interpreter (Python 3.14.6).
+# Supported CI matrix versions defined in .github/workflows/ci.yml:
+# 3.10, 3.11, 3.12, 3.13 (pending automated upstream CI verification).
+kubernetes==37.0.1
+urllib3==2.8.0
+pytest==9.1.1
+build==1.6.1

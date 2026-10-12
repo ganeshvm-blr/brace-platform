@@ -1,0 +1,406 @@
+name: CI
+
+on:
+  push:
+    branches: ["main"]
+  pull_request:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    defaults:
+      run:
+        shell: bash
+    strategy:
+      matrix:
+        python-version: ["3.10", "3.11", "3.12", "3.13"]
+    steps:
+      - name: Check out repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1  # actions/checkout v7.0.1
+      - name: Set up Python
+        uses: actions/setup-python@5fda3b95a4ea91299a34e894583c3862153e4b97  # actions/setup-python v7.0.0
+        with:
+          python-version: ${{ matrix.python-version }}
+
+      - name: Audit checked-out source hygiene
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+
+          root = pathlib.Path(".")
+
+          approved_package_files = frozenset(
+              {
+                  "__init__.py",
+                  "_evidence_kind.py",
+                  "_evidence_semantic.py",
+                  "_execution.py",
+                  "_http_client_transport.py",
+                  "_kubernetes_namespace.py",
+                  "_kubernetes_readiness.py",
+                  "_kubernetes_responsiveness.py",
+                  "_kubernetes_workload.py",
+                  "_observed_content.py",
+                  "_operational_projection.py",
+                  "_provenance.py",
+                  "_recoverability_knowledge.py",
+                  "_recoverability_subject.py",
+                  "_recoverability_truth_standing_value.py",
+                  "_recovery_event.py",
+                  "_recovery_observation.py",
+                  "_runtime_observation_convergence.py",
+                  "_runtime_owned_composition.py",
+                  "_runtime_owned_request.py",
+                  "_runtime_owned_verification.py",
+                  "_workload.py",
+                  "reasoning/__init__.py",
+                  "reasoning/boundary.py",
+              }
+          )
+
+          credential_patterns = [
+              ("private key", re.compile(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+              ("AWS access key ID", re.compile(r"AKIA[0-9A-Z]{16}")),
+              ("GitHub personal access token", re.compile(r"github_pat_[0-9A-Za-z_]{20,}")),
+              ("Slack token", re.compile(r"xox[baprs]-[0-9A-Za-z-]{10,}")),
+              ("secret assignment", re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)\s*[:=]\s*['\"][^'\"]{12,}['\"]")),
+          ]
+
+          backup_suffixes = (".tmp", ".bak", ".orig", ".rej", ".swp", "~")
+          backup_names = {".DS_Store", "Thumbs.db"}
+          text_suffixes = {".py", ".toml", ".md", ".yml", ".yaml", ".in", ".json", ".txt"}
+          problems = []
+
+          def record(where, what):
+              problems.append(f"{where}: {what}")
+
+          # Check package directory strictly against approved files allowlist
+          pkg_root = root / "src" / "brace"
+          if pkg_root.is_dir():
+              for p in pkg_root.rglob("*"):
+                  if "__pycache__" in p.parts:
+                      continue
+                  if p.is_file():
+                      rel = p.relative_to(pkg_root).as_posix()
+                      if rel not in approved_package_files:
+                          record(str(p), f"unapproved package file {rel}")
+
+          # Scan all files in repository including .github (skipping .git and temporary build/env dirs)
+          skip_dirs = {".git", "__pycache__", ".venv", "venv", "dist", "build"}
+          for p in root.rglob("*"):
+              if any(part in skip_dirs for part in p.parts):
+                  continue
+              if p.name == "__pycache__":
+                  record(str(p), "__pycache__ directory")
+                  continue
+              if p.suffix in {".pyc", ".pyo", ".pyd"}:
+                  record(str(p), "bytecode artifact")
+                  continue
+              if p.name in backup_names or p.name.endswith(backup_suffixes):
+                  record(str(p), "temporary/backup file")
+                  continue
+              if p.is_file() and p.suffix in text_suffixes:
+                  try:
+                      content = p.read_text(encoding="utf-8")
+                  except (UnicodeDecodeError, OSError):
+                      continue
+                  for pattern_name, pattern in credential_patterns:
+                      if pattern.search(content):
+                          record(str(p), f"credential-like pattern ({pattern_name})")
+
+          if problems:
+              for problem in problems:
+                  print("PROBLEM:", problem)
+              raise SystemExit(1)
+          print("source hygiene: PASS (approved package layout exact, no credentials or backup files)")
+          PY
+
+      - name: Install package
+        run: |
+          python -m pip install --upgrade pip
+          python -m pip install -c constraints.txt -e ".[dev]"
+
+      - name: Run test suite
+        run: python -m pytest tests -v -p no:cacheprovider
+
+      - name: Audit installed public module surface
+        run: |
+          python - <<'PY'
+          import importlib
+          import pathlib
+          import sys
+
+          retained = [
+              "brace",
+              "brace._evidence_kind",
+              "brace._evidence_semantic",
+              "brace._execution",
+              "brace._http_client_transport",
+              "brace._kubernetes_namespace",
+              "brace._kubernetes_readiness",
+              "brace._kubernetes_responsiveness",
+              "brace._kubernetes_workload",
+              "brace._observed_content",
+              "brace._operational_projection",
+              "brace._provenance",
+              "brace._recoverability_knowledge",
+              "brace._recoverability_subject",
+              "brace._recoverability_truth_standing_value",
+              "brace._recovery_event",
+              "brace._recovery_observation",
+              "brace._runtime_observation_convergence",
+              "brace._runtime_owned_composition",
+              "brace._runtime_owned_request",
+              "brace._runtime_owned_verification",
+              "brace._workload",
+              "brace.reasoning",
+              "brace.reasoning.boundary",
+          ]
+
+          package = importlib.import_module("brace")
+          package_root = pathlib.Path(package.__file__).resolve().parent
+
+          for name in retained:
+              module = importlib.import_module(name)
+              origin = pathlib.Path(module.__file__).resolve()
+              if not origin.is_relative_to(package_root):
+                  raise AssertionError(
+                      f"{name} resolves outside the installed package: {origin}"
+                  )
+
+          from brace._evidence_kind import EvidenceKind  # noqa: E402
+
+          members = {member.name for member in EvidenceKind}
+          if members != {"KUBERNETES_READINESS", "APPLICATION_RESPONSIVENESS"}:
+              raise AssertionError(f"unexpected EvidenceKind members: {members}")
+
+          brace_modules = [
+              name
+              for name in sys.modules
+              if name == "brace" or name.startswith("brace.")
+          ]
+          unexpected_modules = [m for m in brace_modules if m not in retained]
+          if unexpected_modules:
+              raise AssertionError(
+                  f"unexpected modules in sys.modules: {unexpected_modules}"
+              )
+
+          print(
+              f"module surface: PASS ({len(retained)} retained modules, "
+              "no unexpected modules, EvidenceKind exact)"
+          )
+          PY
+
+      - name: Build distributions
+        run: python -m build
+
+      - name: Audit distribution contents
+        run: |
+          python - <<'PY'
+          import pathlib
+          import re
+          import tarfile
+          import zipfile
+
+          dist = pathlib.Path("dist")
+
+          retained = [
+              "brace/__init__.py",
+              "brace/_evidence_kind.py",
+              "brace/_evidence_semantic.py",
+              "brace/_execution.py",
+              "brace/_http_client_transport.py",
+              "brace/_kubernetes_namespace.py",
+              "brace/_kubernetes_readiness.py",
+              "brace/_kubernetes_responsiveness.py",
+              "brace/_kubernetes_workload.py",
+              "brace/_observed_content.py",
+              "brace/_operational_projection.py",
+              "brace/_provenance.py",
+              "brace/_recoverability_knowledge.py",
+              "brace/_recoverability_subject.py",
+              "brace/_recoverability_truth_standing_value.py",
+              "brace/_recovery_event.py",
+              "brace/_recovery_observation.py",
+              "brace/_runtime_observation_convergence.py",
+              "brace/_runtime_owned_composition.py",
+              "brace/_runtime_owned_request.py",
+              "brace/_runtime_owned_verification.py",
+              "brace/_workload.py",
+              "brace/reasoning/__init__.py",
+              "brace/reasoning/boundary.py",
+          ]
+
+          credential_patterns = [
+              ("private key", re.compile(r"-----BEGIN (RSA |EC |OPENSSH )?PRIVATE KEY-----")),
+              ("AWS access key ID", re.compile(r"AKIA[0-9A-Z]{16}")),
+              ("GitHub personal access token", re.compile(r"github_pat_[0-9A-Za-z_]{20,}")),
+              ("Slack token", re.compile(r"xox[baprs]-[0-9A-Za-z-]{10,}")),
+              ("secret assignment", re.compile(r"(?i)(api[_-]?key|secret|password|passwd|token)\s*[:=]\s*['\"][^'\"]{12,}['\"]")),
+          ]
+
+          backup_suffixes = (".tmp", ".bak", ".orig", ".rej", ".swp", "~")
+          backup_names = {".DS_Store", "Thumbs.db"}
+
+          def check_member_name(name, archive):
+              if "__pycache__" in name or name.endswith((".pyc", ".pyo", ".pyd")):
+                  raise AssertionError(f"{archive} contains bytecode member {name}")
+              parts = pathlib.PurePosixPath(name).parts
+              if "tests" in parts:
+                  raise AssertionError(f"{archive} contains test member {name}")
+              basename = pathlib.PurePosixPath(name).name
+              if basename.endswith(backup_suffixes) or basename in backup_names:
+                  raise AssertionError(f"{archive} contains backup/temporary member {name}")
+              if name.endswith((".env", ".pem", ".key")):
+                  raise AssertionError(f"{archive} contains credential-like member {name}")
+
+          def check_text_content(content_str, member_name, archive):
+              for pattern_name, pattern in credential_patterns:
+                  if pattern.search(content_str):
+                      raise AssertionError(
+                          f"{archive} member {member_name} contains credential-like pattern ({pattern_name})"
+                      )
+
+          def audit_wheel_archive(wheel_path_obj):
+              with zipfile.ZipFile(wheel_path_obj) as zf:
+                  names = zf.namelist()
+                  for name in names:
+                      check_member_name(name, wheel_path_obj.name)
+                      if name.endswith((".py", ".txt", ".METADATA", ".RECORD", ".WHEEL", "METADATA", "RECORD", "WHEEL")):
+                          text = zf.read(name).decode("utf-8", errors="replace")
+                          check_text_content(text, name, wheel_path_obj.name)
+                  module_members = [
+                      n for n in names if n.startswith("brace/") and n.endswith(".py")
+                  ]
+                  if sorted(module_members) != sorted(retained):
+                      raise AssertionError(
+                          f"wheel module set mismatch: {module_members}"
+                      )
+                  metadata_members = [n for n in names if not n.startswith("brace/")]
+                  for member in metadata_members:
+                      if not member.endswith(
+                          (
+                              ".dist-info/METADATA",
+                              ".dist-info/RECORD",
+                              ".dist-info/WHEEL",
+                              ".dist-info/top_level.txt",
+                          )
+                      ):
+                          raise AssertionError(
+                              f"wheel contains unexpected member {member}"
+                          )
+              return names
+
+          wheels = sorted(dist.glob("*.whl"))
+          sdists = sorted(dist.glob("*.tar.gz"))
+          if len(wheels) != 1 or len(sdists) != 1:
+              raise AssertionError("expected exactly one wheel and one sdist")
+
+          wheel_path = wheels[0]
+          audit_wheel_archive(wheel_path)
+          print(f"wheel audit: PASS ({len(retained)} modules + metadata; names and contents verified)")
+
+          sdist_path = sdists[0]
+          with tarfile.open(sdist_path) as tf:
+              members = [m for m in tf.getmembers() if m.isfile()]
+              root = members[0].name.split("/", 1)[0]
+              for m in members:
+                  check_member_name(m.name, sdist_path.name)
+                  f = tf.extractfile(m)
+                  if f:
+                      text = f.read().decode("utf-8", errors="replace")
+                      check_text_content(text, m.name, sdist_path.name)
+              module_members = sorted(
+                  m.name.split("/", 1)[1].split("/", 1)[1]
+                  for m in members
+                  if m.name.startswith(root + "/src/brace/") and m.name.endswith(".py")
+              )
+              if module_members != sorted(retained):
+                  raise AssertionError(
+                      f"sdist module set mismatch: {module_members}"
+                  )
+          print(
+              f"sdist audit: PASS ({len(retained)} modules; names and contents verified)"
+          )
+          PY
+
+      - name: Verify isolated wheel installation
+        run: |
+          WHEEL_VENV="${RUNNER_TEMP}/wheel-verify-venv"
+          python -m venv "${WHEEL_VENV}"
+          "${WHEEL_VENV}/bin/python" -m pip install --upgrade pip
+          "${WHEEL_VENV}/bin/python" -m pip install -c constraints.txt dist/*.whl
+          "${WHEEL_VENV}/bin/python" -m pip check
+          (cd "${RUNNER_TEMP}" && PYTHONPATH= "${WHEEL_VENV}/bin/python" - <<'PY'
+          import importlib
+          import os
+          import pathlib
+          import sys
+
+          package = importlib.import_module("brace")
+          package_path = pathlib.Path(package.__file__).resolve()
+          prefix_path = pathlib.Path(sys.prefix).resolve()
+          workspace_env = os.environ.get("GITHUB_WORKSPACE")
+          workspace_path = pathlib.Path(workspace_env).resolve() if workspace_env else None
+
+          print("Isolated wheel package origin:", package_path)
+          print("sys.prefix:", prefix_path)
+
+          assert package_path.is_relative_to(prefix_path), f"not relative to sys.prefix: {package_path}"
+          if workspace_path:
+              assert not package_path.is_relative_to(workspace_path), f"resolved inside GITHUB_WORKSPACE: {package_path}"
+
+          retained = [
+              "brace",
+              "brace._evidence_kind",
+              "brace._evidence_semantic",
+              "brace._execution",
+              "brace._http_client_transport",
+              "brace._kubernetes_namespace",
+              "brace._kubernetes_readiness",
+              "brace._kubernetes_responsiveness",
+              "brace._kubernetes_workload",
+              "brace._observed_content",
+              "brace._operational_projection",
+              "brace._provenance",
+              "brace._recoverability_knowledge",
+              "brace._recoverability_subject",
+              "brace._recoverability_truth_standing_value",
+              "brace._recovery_event",
+              "brace._recovery_observation",
+              "brace._runtime_observation_convergence",
+              "brace._runtime_owned_composition",
+              "brace._runtime_owned_request",
+              "brace._runtime_owned_verification",
+              "brace._workload",
+              "brace.reasoning",
+              "brace.reasoning.boundary",
+          ]
+
+          package_dir = package_path.parent
+          for name in retained:
+              mod = importlib.import_module(name)
+              origin = pathlib.Path(mod.__file__).resolve()
+              assert origin.is_relative_to(package_dir), f"{name} outside package dir: {origin}"
+              assert origin.is_relative_to(prefix_path), f"{name} outside sys.prefix: {origin}"
+              if workspace_path:
+                  assert not origin.is_relative_to(workspace_path), f"{name} inside GITHUB_WORKSPACE: {origin}"
+
+          brace_modules = [m for m in sys.modules if m == "brace" or m.startswith("brace.")]
+          for m in brace_modules:
+              assert m in retained, f"unexpected module in isolated wheel: {m}"
+
+          from brace._evidence_kind import EvidenceKind
+          assert {e.name for e in EvidenceKind} == {"KUBERNETES_READINESS", "APPLICATION_RESPONSIVENESS"}
+          print(f"Isolated wheel verification: PASS ({len(retained)} modules resolved from site-packages)")
+          PY
+          )
