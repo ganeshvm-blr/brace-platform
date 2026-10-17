@@ -125,16 +125,9 @@ def validate_node_instance_eligibility(
     aws_region: str,
     evidence_dir: str | None = None,
 ) -> None:
-    """Preflight check validating that the requested node instance type is Free Tier eligible,
-
-    supports x86_64 architecture, is offered in the specified region, and exactly matches
-    the validated type without silent substitution.
-    Fails closed on access denial, timeout, malformed output or absent candidate.
-    """
     if not instance_type or not isinstance(instance_type, str):
         raise ValueError(f"Invalid node instance type specified: {instance_type}")
 
-    # 1. Query free-tier eligible instance types in the region
     ft_cmd = [
         "aws", "ec2", "describe-instance-types",
         "--region", aws_region,
@@ -166,20 +159,17 @@ def validate_node_instance_eligibility(
             f"Configured node instance type '{instance_type}' is not Free Tier eligible in region {aws_region}."
         )
 
-    # Validate free-tier eligibility field explicitly
     if matching_type_spec.get("FreeTierEligible") is not True:
         raise RuntimeError(
             f"Configured node instance type '{instance_type}' does not have FreeTierEligible=true in region {aws_region}."
         )
 
-    # Validate architecture: must support x86_64
     supported_archs = matching_type_spec.get("ProcessorInfo", {}).get("SupportedArchitectures", [])
     if "x86_64" not in supported_archs:
         raise RuntimeError(
             f"Configured node instance type '{instance_type}' does not support required architecture 'x86_64' (supports: {supported_archs})."
         )
 
-    # 2. Query regional offering
     offering_cmd = [
         "aws", "ec2", "describe-instance-type-offerings",
         "--location-type", "region",

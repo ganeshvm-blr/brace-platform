@@ -1180,7 +1180,6 @@ def test_validate_node_instance_eligibility_success():
             return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
 
         with patch("scripts.live_demo.run_command", side_effect=mock_cmd):
-            # Should succeed cleanly without exception
             live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
 
 
@@ -1204,7 +1203,6 @@ def test_validate_node_instance_eligibility_ineligible_fails():
             with pytest.raises(RuntimeError, match="FreeTierEligible=true"):
                 live_demo.validate_node_instance_eligibility("t3.medium", "ap-south-1", evidence_dir=tmpdir)
 
-        # Also when instance type is completely missing from free-tier results
         def mock_cmd_missing(cmd, **kwargs):
             if "describe-instance-types" in cmd:
                 payload = {"InstanceTypes": []}
@@ -1263,7 +1261,6 @@ def test_validate_node_instance_eligibility_unavailable_offering_fails():
 
 def test_validate_node_instance_eligibility_discovery_errors_fail_closed():
     with tempfile.TemporaryDirectory() as tmpdir:
-        # 1. Access denied
         def mock_denied(cmd, **kwargs):
             return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="AccessDeniedException: user not authorized", start_time="", end_time="")
 
@@ -1271,7 +1268,6 @@ def test_validate_node_instance_eligibility_discovery_errors_fail_closed():
             with pytest.raises(RuntimeError, match="Access denied querying free-tier instance types"):
                 live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
 
-        # 2. Timeout
         def mock_timeout(cmd, **kwargs):
             return live_demo.CommandResult(args=cmd, returncode=-124, stdout="", stderr="Error: Command timed out", start_time="", end_time="")
 
@@ -1279,7 +1275,6 @@ def test_validate_node_instance_eligibility_discovery_errors_fail_closed():
             with pytest.raises(RuntimeError, match="Timeout querying free-tier instance types"):
                 live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
 
-        # 3. Malformed json
         def mock_malformed(cmd, **kwargs):
             return live_demo.CommandResult(args=cmd, returncode=0, stdout="not-json", stderr="", start_time="", end_time="")
 
@@ -1332,14 +1327,10 @@ def test_exact_validated_type_transports_to_apply_and_destroy_without_substituti
                                 dry_run=False,
                                 node_instance_type=configured_type,
                             )
-                            # Preflight was called with the exact type
                             mock_val.assert_called_once()
                             assert mock_val.call_args[1]["instance_type"] == configured_type
 
-                            # Apply received exact -var=node_instance_type=t3.small
                             assert f"-var=node_instance_type={configured_type}" in apply_args
-                            # Destroy received exact -var=node_instance_type=t3.small
                             assert f"-var=node_instance_type={configured_type}" in destroy_args
-                            # No fallback or alternate type substituted
                             assert not any("t3.medium" in arg for arg in apply_args)
                             assert not any("t3.medium" in arg for arg in destroy_args)
