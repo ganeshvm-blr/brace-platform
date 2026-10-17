@@ -227,18 +227,19 @@ def test_preexisting_terraform_state_refused():
         with open(os.path.join(tf_dir, "terraform.tfstate"), "w") as f:
             f.write('{"version": 4, "serial": 1, "resources": [{"name": "old"}]}')
 
-        code = live_demo.execute_public_live_demo(
-            workload_image="ghcr.io/demo/app@sha256:" + ("1" * 64),
-            verifier_image="ghcr.io/demo/verifier@sha256:" + ("2" * 64),
-            repo_root=tmpdir,
-            dry_run=False,
-        )
-        assert code == 1
-        summary_base = os.path.join(tmpdir, ".demo", "evidence")
-        run_ids = os.listdir(summary_base)
-        with open(os.path.join(summary_base, run_ids[0], "summary.json")) as f:
-            summary = json.load(f)
-            assert any("Unrelated pre-existing Terraform state found" in e for e in summary["errors"])
+        with patch("scripts.live_demo.validate_node_instance_eligibility"):
+            code = live_demo.execute_public_live_demo(
+                workload_image="ghcr.io/demo/app@sha256:" + ("1" * 64),
+                verifier_image="ghcr.io/demo/verifier@sha256:" + ("2" * 64),
+                repo_root=tmpdir,
+                dry_run=False,
+            )
+            assert code == 1
+            summary_base = os.path.join(tmpdir, ".demo", "evidence")
+            run_ids = os.listdir(summary_base)
+            with open(os.path.join(summary_base, run_ids[0], "summary.json")) as f:
+                summary = json.load(f)
+                assert any("Unrelated pre-existing Terraform state found" in e for e in summary["errors"])
 
 
 def test_ownership_verification_fails_closed():
@@ -465,6 +466,24 @@ def test_evidence_survives_verification_failure_and_is_retained():
             return live_demo.CommandResult(cmd, 254, "", "InvalidSubnetID.NotFound: subnets not found", "", "")
         if "describe-vpcs" in cmd:
             return live_demo.CommandResult(cmd, 254, "", "InvalidVpcID.NotFound: vpc not found", "", "")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
 
     with patch.object(live_demo, "run_command", mock_run_command):
@@ -537,6 +556,24 @@ def test_partial_provisioning_triggers_cleanup():
             return live_demo.CommandResult(cmd, 0, json.dumps({"values": {"root_module": {}}}), "", "", "")
         if "plan" in cmd:
             return live_demo.CommandResult(cmd, 0, "", "", "", "")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
 
     with patch.object(live_demo, "run_command", mock_run_command):
@@ -585,6 +622,24 @@ def test_cleanup_failure_does_not_hide_original_failure():
             return live_demo.CommandResult(cmd, 0, "", "", "", "")
         if "describe-cluster" in cmd:
             return live_demo.CommandResult(cmd, 254, "", "ResourceNotFoundException: cluster not found", "", "")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
 
     with patch.object(live_demo, "run_command", mock_run_command):
@@ -647,6 +702,24 @@ def test_residue_access_denied_fails_completion_gate():
                 ],
                 "knowledge": {"standing": RecoverabilityTruthStandingValue.RECOVERABILITY_AFFIRMED.value},
             }), "", "", "")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
 
     with patch.object(live_demo, "run_command", mock_run_command):
@@ -681,6 +754,24 @@ def test_interruption_safe_teardown_guarantee():
 
     def mock_run_command(cmd, cwd=None, evidence_dir=None, **kwargs):
         calls.append(cmd)
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         if "apply" in cmd and cwd is not None:
             raise KeyboardInterrupt("Simulated SIGINT")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
@@ -740,6 +831,24 @@ def test_k8s_cleanup_exception_and_interruption_still_executes_teardown():
                 ],
                 "knowledge": {"standing": RecoverabilityTruthStandingValue.RECOVERABILITY_AFFIRMED.value},
             }), "", "", "")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
         return live_demo.CommandResult(cmd, 0, "{}", "", "", "")
 
     with patch.object(live_demo, "run_command", mock_run_command):
@@ -807,6 +916,24 @@ def test_terraform_apply_receives_explicit_2700_second_timeout():
             return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
         if "output" in cmd:
             return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"cluster_name": {"value": "test"}}), stderr="", start_time="", end_time="")
+        if "describe-instance-types" in cmd:
+            payload = {
+                "InstanceTypes": [
+                    {
+                        "InstanceType": "t3.small",
+                        "FreeTierEligible": True,
+                        "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                    }
+                ]
+            }
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+        if "describe-instance-type-offerings" in cmd:
+            payload = {
+                "InstanceTypeOfferings": [
+                    {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                ]
+            }
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
         return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
 
     with tempfile.TemporaryDirectory() as tmpdir:
@@ -980,6 +1107,24 @@ def test_teardown_blocks_destroy_and_preserves_primary_failure_if_nodegroup_clea
             nonlocal destroy_called
             if "init" in cmd:
                 return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            if "describe-instance-types" in cmd:
+                payload = {
+                    "InstanceTypes": [
+                        {
+                            "InstanceType": "t3.small",
+                            "FreeTierEligible": True,
+                            "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                        }
+                    ]
+                }
+                return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
+            if "describe-instance-type-offerings" in cmd:
+                payload = {
+                    "InstanceTypeOfferings": [
+                        {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                    ]
+                }
+                return live_demo.CommandResult(cmd, 0, json.dumps(payload), "", "", "")
             if "apply" in cmd:
                 raise subprocess.TimeoutExpired(cmd=cmd, timeout=2700.0)
             if "list-nodegroups" in cmd:
@@ -1009,3 +1154,192 @@ def test_teardown_blocks_destroy_and_preserves_primary_failure_if_nodegroup_clea
             assert summary["stages"]["TEARDOWN"] == "FAIL"
             assert any("Command timed out after 2700.0" in err or "timed out" in err.lower() for err in summary["errors"])
             assert any("Pre-destroy nodegroup cleanup failure" in err for err in summary["errors"])
+
+
+def test_validate_node_instance_eligibility_success():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_cmd(cmd, **kwargs):
+            if "describe-instance-types" in cmd:
+                payload = {
+                    "InstanceTypes": [
+                        {
+                            "InstanceType": "t3.small",
+                            "FreeTierEligible": True,
+                            "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                        }
+                    ]
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            if "describe-instance-type-offerings" in cmd:
+                payload = {
+                    "InstanceTypeOfferings": [
+                        {"InstanceType": "t3.small", "Location": "ap-south-1"}
+                    ]
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_cmd):
+            # Should succeed cleanly without exception
+            live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
+
+
+def test_validate_node_instance_eligibility_ineligible_fails():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_cmd(cmd, **kwargs):
+            if "describe-instance-types" in cmd:
+                payload = {
+                    "InstanceTypes": [
+                        {
+                            "InstanceType": "t3.medium",
+                            "FreeTierEligible": False,
+                            "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                        }
+                    ]
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="{}", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_cmd):
+            with pytest.raises(RuntimeError, match="FreeTierEligible=true"):
+                live_demo.validate_node_instance_eligibility("t3.medium", "ap-south-1", evidence_dir=tmpdir)
+
+        # Also when instance type is completely missing from free-tier results
+        def mock_cmd_missing(cmd, **kwargs):
+            if "describe-instance-types" in cmd:
+                payload = {"InstanceTypes": []}
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="{}", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_cmd_missing):
+            with pytest.raises(RuntimeError, match="not Free Tier eligible"):
+                live_demo.validate_node_instance_eligibility("t3.medium", "ap-south-1", evidence_dir=tmpdir)
+
+
+def test_validate_node_instance_eligibility_architecture_mismatch_fails():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_cmd(cmd, **kwargs):
+            if "describe-instance-types" in cmd:
+                payload = {
+                    "InstanceTypes": [
+                        {
+                            "InstanceType": "t4g.small",
+                            "FreeTierEligible": True,
+                            "ProcessorInfo": {"SupportedArchitectures": ["arm64"]},
+                        }
+                    ]
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="{}", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_cmd):
+            with pytest.raises(RuntimeError, match="does not support required architecture 'x86_64'"):
+                live_demo.validate_node_instance_eligibility("t4g.small", "ap-south-1", evidence_dir=tmpdir)
+
+
+def test_validate_node_instance_eligibility_unavailable_offering_fails():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_cmd(cmd, **kwargs):
+            if "describe-instance-types" in cmd:
+                payload = {
+                    "InstanceTypes": [
+                        {
+                            "InstanceType": "t3.small",
+                            "FreeTierEligible": True,
+                            "ProcessorInfo": {"SupportedArchitectures": ["x86_64"]},
+                        }
+                    ]
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            if "describe-instance-type-offerings" in cmd:
+                payload = {"InstanceTypeOfferings": []}
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(payload), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_cmd):
+            with pytest.raises(RuntimeError, match="has no regional offering"):
+                live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
+
+
+def test_validate_node_instance_eligibility_discovery_errors_fail_closed():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        # 1. Access denied
+        def mock_denied(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="AccessDeniedException: user not authorized", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_denied):
+            with pytest.raises(RuntimeError, match="Access denied querying free-tier instance types"):
+                live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
+
+        # 2. Timeout
+        def mock_timeout(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=-124, stdout="", stderr="Error: Command timed out", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_timeout):
+            with pytest.raises(RuntimeError, match="Timeout querying free-tier instance types"):
+                live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
+
+        # 3. Malformed json
+        def mock_malformed(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="not-json", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_malformed):
+            with pytest.raises(RuntimeError, match="Malformed json response from describe-instance-types"):
+                live_demo.validate_node_instance_eligibility("t3.small", "ap-south-1", evidence_dir=tmpdir)
+
+
+def test_exact_validated_type_transports_to_apply_and_destroy_without_substitution():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tf_dir = os.path.join(tmpdir, "infra", "terraform")
+        k8s_dir = os.path.join(tmpdir, "k8s", "verifier")
+        os.makedirs(tf_dir, exist_ok=True)
+        os.makedirs(k8s_dir, exist_ok=True)
+
+        apply_args: list[str] = []
+        destroy_args: list[str] = []
+
+        def mock_run_cmd(cmd, **kwargs):
+            nonlocal apply_args, destroy_args
+            if "init" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            if "apply" in cmd:
+                apply_args = list(cmd)
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            if "output" in cmd:
+                outputs = {
+                    "cluster_name": {"value": "test-cluster"},
+                    "cluster_arn": {"value": "arn:aws:eks:test"},
+                    "vpc_id": {"value": "vpc-123"},
+                    "subnet_ids": {"value": ["subnet-1"]},
+                }
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps(outputs), stderr="", start_time="", end_time="")
+            if "destroy" in cmd:
+                destroy_args = list(cmd)
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        configured_type = "t3.small"
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            with patch("scripts.live_demo.validate_image_digest_pinning"):
+                with patch("scripts.live_demo.validate_node_instance_eligibility") as mock_val:
+                    with patch("scripts.live_demo.cleanup_attached_nodegroups", return_value=(True, "Clean")):
+                        with patch("scripts.live_demo.audit_cloud_residue", return_value=("CLEAN", [])):
+                            code = live_demo.execute_public_live_demo(
+                                workload_image="ghcr.io/test/workload@sha256:" + ("0" * 64),
+                                verifier_image="ghcr.io/test/verifier@sha256:" + ("0" * 64),
+                                repo_root=tmpdir,
+                                dry_run=False,
+                                node_instance_type=configured_type,
+                            )
+                            # Preflight was called with the exact type
+                            mock_val.assert_called_once()
+                            assert mock_val.call_args[1]["instance_type"] == configured_type
+
+                            # Apply received exact -var=node_instance_type=t3.small
+                            assert f"-var=node_instance_type={configured_type}" in apply_args
+                            # Destroy received exact -var=node_instance_type=t3.small
+                            assert f"-var=node_instance_type={configured_type}" in destroy_args
+                            # No fallback or alternate type substituted
+                            assert not any("t3.medium" in arg for arg in apply_args)
+                            assert not any("t3.medium" in arg for arg in destroy_args)

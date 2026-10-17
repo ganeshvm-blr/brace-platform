@@ -28,6 +28,7 @@ TIMEOUT_DEFAULT_COMMAND = 120.0
 TIMEOUT_TERRAFORM_APPLY = 2700.0
 TIMEOUT_TERRAFORM_DESTROY = 1800.0
 TIMEOUT_KUBECTL_WAIT = 600.0
+DEFAULT_NODE_INSTANCE_TYPE = "t3.small"
 
 
 class CommandResult(NamedTuple):
@@ -117,6 +118,94 @@ def validate_image_digest_pinning(image: str, allow_placeholder: bool = False) -
         raise ValueError(f"Image digest {digest} must be exactly 64 lowercase hexadecimal characters")
     if not allow_placeholder and (digest == "0" * 64 or digest == "f" * 64):
         raise ValueError(f"Placeholder image digest {digest} is prohibited for live execution")
+
+
+def validate_node_instance_eligibility(
+    instance_type: str,
+    aws_region: str,
+    evidence_dir: str | None = None,
+) -> None:
+    """Preflight check validating that the requested node instance type is Free Tier eligible,
+
+    supports x86_64 architecture, is offered in the specified region, and exactly matches
+    the validated type without silent substitution.
+    Fails closed on access denial, timeout, malformed output or absent candidate.
+    """
+    if not instance_type or not isinstance(instance_type, str):
+        raise ValueError(f"Invalid node instance type specified: {instance_type}")
+
+    # 1. Query free-tier eligible instance types in the region
+    ft_cmd = [
+        "aws", "ec2", "describe-instance-types",
+        "--region", aws_region,
+        "--filters", "Name=free-tier-eligible,Values=true",
+    ]
+    ft_res = run_command(ft_cmd, evidence_dir=evidence_dir)
+    if ft_res.returncode != 0:
+        stderr = ft_res.stderr.lower()
+        if "accessdenied" in stderr or "unauthorized" in stderr:
+            raise RuntimeError(f"Access denied querying free-tier instance types in {aws_region}: {ft_res.stderr}")
+        if ft_res.returncode == -124:
+            raise RuntimeError(f"Timeout querying free-tier instance types in {aws_region}")
+        raise RuntimeError(f"Error querying free-tier instance types in {aws_region}: {ft_res.stderr}")
+
+    try:
+        ft_data = json.loads(ft_res.stdout)
+        types_list = ft_data.get("InstanceTypes", [])
+    except Exception as exc:
+        raise RuntimeError(f"Malformed json response from describe-instance-types: {exc}") from exc
+
+    matching_type_spec: dict[str, Any] | None = None
+    for item in types_list:
+        if item.get("InstanceType") == instance_type:
+            matching_type_spec = item
+            break
+
+    if matching_type_spec is None:
+        raise RuntimeError(
+            f"Configured node instance type '{instance_type}' is not Free Tier eligible in region {aws_region}."
+        )
+
+    # Validate free-tier eligibility field explicitly
+    if matching_type_spec.get("FreeTierEligible") is not True:
+        raise RuntimeError(
+            f"Configured node instance type '{instance_type}' does not have FreeTierEligible=true in region {aws_region}."
+        )
+
+    # Validate architecture: must support x86_64
+    supported_archs = matching_type_spec.get("ProcessorInfo", {}).get("SupportedArchitectures", [])
+    if "x86_64" not in supported_archs:
+        raise RuntimeError(
+            f"Configured node instance type '{instance_type}' does not support required architecture 'x86_64' (supports: {supported_archs})."
+        )
+
+    # 2. Query regional offering
+    offering_cmd = [
+        "aws", "ec2", "describe-instance-type-offerings",
+        "--location-type", "region",
+        "--filters", f"Name=location,Values={aws_region}",
+        "--region", aws_region,
+    ]
+    off_res = run_command(offering_cmd, evidence_dir=evidence_dir)
+    if off_res.returncode != 0:
+        stderr = off_res.stderr.lower()
+        if "accessdenied" in stderr or "unauthorized" in stderr:
+            raise RuntimeError(f"Access denied querying instance type offerings in {aws_region}: {off_res.stderr}")
+        if off_res.returncode == -124:
+            raise RuntimeError(f"Timeout querying instance type offerings in {aws_region}")
+        raise RuntimeError(f"Error querying instance type offerings in {aws_region}: {off_res.stderr}")
+
+    try:
+        off_data = json.loads(off_res.stdout)
+        offerings = off_data.get("InstanceTypeOfferings", [])
+    except Exception as exc:
+        raise RuntimeError(f"Malformed json response from describe-instance-type-offerings: {exc}") from exc
+
+    offered = any(off.get("InstanceType") == instance_type for off in offerings)
+    if not offered:
+        raise RuntimeError(
+            f"Configured node instance type '{instance_type}' has no regional offering in {aws_region}."
+        )
 
 
 def build_verification_request_payload(
@@ -616,6 +705,7 @@ def execute_public_live_demo(
     repo_root: str | None = None,
     dry_run: bool = False,
     aws_region: str = "ap-south-1",
+    node_instance_type: str = DEFAULT_NODE_INSTANCE_TYPE,
 ) -> int:
     root = repo_root or os.path.abspath(os.path.join(os.path.dirname(__file__), ".."))
     if repo_root is not None and not os.path.isdir(repo_root):
@@ -645,6 +735,12 @@ def execute_public_live_demo(
             raise ValueError("--verifier-image must be provided for live demonstration execution")
         validate_image_digest_pinning(workload_image, allow_placeholder=False)
         validate_image_digest_pinning(verifier_image, allow_placeholder=False)
+        print(f"Validating node instance type '{node_instance_type}' eligibility in region {aws_region}...")
+        validate_node_instance_eligibility(
+            instance_type=node_instance_type,
+            aws_region=aws_region,
+            evidence_dir=evidence_dir,
+        )
 
     stages = {
         "VALIDATION": "PASS",
@@ -709,6 +805,7 @@ def execute_public_live_demo(
             f"-var=aws_region={aws_region}",
             f"-var=cluster_name={unique_cluster_name}",
             f"-var=run_id={run_id}",
+            f"-var=node_instance_type={node_instance_type}",
             f"-state={state_file}",
         ]
 
@@ -860,6 +957,7 @@ def execute_public_live_demo(
             f"-var=aws_region={aws_region}",
             f"-var=cluster_name={unique_cluster_name}",
             f"-var=run_id={run_id}",
+            f"-var=node_instance_type={node_instance_type}",
             f"-state={state_file}",
         ]
         try:
@@ -969,6 +1067,7 @@ def execute_public_live_demo(
                         "workload_image": workload_image,
                         "verifier_image": verifier_image,
                         "aws_region": aws_region,
+                        "node_instance_type": node_instance_type,
                         "cloud_resources": cloud_resources,
                     }, errors=errors)
 
@@ -980,6 +1079,7 @@ def main() -> None:
     parser.add_argument("--workload-image", help="Digest-pinned workload image")
     parser.add_argument("--verifier-image", help="Digest-pinned verifier image")
     parser.add_argument("--aws-region", default="ap-south-1", help="Explicit AWS region (default: ap-south-1)")
+    parser.add_argument("--node-instance-type", default=DEFAULT_NODE_INSTANCE_TYPE, help=f"Explicit node instance type (default: {DEFAULT_NODE_INSTANCE_TYPE})")
     parser.add_argument("--repo-root", help="Explicit path to public repository checkout")
     parser.add_argument("--dry-run", action="store_true", help="Simulate execution without cloud mutations")
     args = parser.parse_args()
@@ -991,6 +1091,7 @@ def main() -> None:
             repo_root=args.repo_root,
             dry_run=args.dry_run,
             aws_region=args.aws_region,
+            node_instance_type=args.node_instance_type,
         )
     )
 

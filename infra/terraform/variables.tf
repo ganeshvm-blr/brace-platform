@@ -21,3 +21,9 @@ variable "run_id" {
   description = "Execution run identifier for ownership tagging."
   default     = "default"
 }
+
+variable "node_instance_type" {
+  type        = string
+  description = "EC2 instance type for EKS managed node group."
+  default     = "t3.small"
+}
