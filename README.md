@@ -24,7 +24,7 @@ The current public baseline demonstrates:
 - explicit primary and cleanup failure preservation;
 - tested package and distribution boundaries.
 
-This public V1 is an orchestration and observation platform. It does not restore backups, provision AWS infrastructure, include the production evaluator, or prove live-cluster recoverability.
+This public V1 is an orchestration and observation platform. It does not restore backups, provision AWS infrastructure, include the production evaluator, or prove live-cluster recoverability. See [docs/public-demo-freeze.md](docs/public-demo-freeze.md) for the verified public demonstration lifecycle record on AWS EKS.
 
 See [docs/public-roadmap.md](docs/public-roadmap.md) for high-level capability directions that are intentionally separated from implementation commitments.
 

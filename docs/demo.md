@@ -212,3 +212,6 @@ python scripts/live_demo.py \
 ### Evidence Separation
 - **Sanitized Exportable Evidence**: Retained directly in `.demo/evidence/<run-id>/` (`summary.json`, `summary.md`, and `verifier-result.json`).
 - **Raw Command Diagnostics**: Preserved in `.demo/evidence/<run-id>/diagnostics/` containing per-command subprocess outputs and exit codes.
+
+### Verified Public AWS Run
+The public AWS live lifecycle has been executed and verified end-to-end on AWS EKS (`ap-south-1`). See [docs/public-demo-freeze.md](public-demo-freeze.md) for the verified public demo freeze record and operational observations.
