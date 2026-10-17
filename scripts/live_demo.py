@@ -25,7 +25,7 @@ from brace._recoverability_truth_standing_value import RecoverabilityTruthStandi
 from brace._runtime_owned_verification import VerificationPhase
 
 TIMEOUT_DEFAULT_COMMAND = 120.0
-TIMEOUT_TERRAFORM_APPLY = 1800.0
+TIMEOUT_TERRAFORM_APPLY = 2700.0
 TIMEOUT_TERRAFORM_DESTROY = 1800.0
 TIMEOUT_KUBECTL_WAIT = 600.0
 
@@ -328,6 +328,91 @@ def extract_cloud_resources_from_state(
         scan_module(root_module)
 
     return resources
+
+
+def cleanup_attached_nodegroups(
+    cluster_name: str,
+    run_id: str,
+    aws_region: str,
+    evidence_dir: str,
+    max_poll_seconds: float = 600.0,
+    poll_interval_seconds: float = 5.0,
+) -> tuple[bool, str]:
+    list_cmd = ["aws", "eks", "list-nodegroups", "--cluster-name", cluster_name, "--region", aws_region]
+    list_res = run_command(list_cmd, evidence_dir=evidence_dir)
+    if list_res.returncode != 0:
+        stderr = list_res.stderr.lower()
+        if "resourcenotfoundexception" in stderr or "notfound" in stderr:
+            return True, "Cluster confirmed absent"
+        if "accessdenied" in stderr or "unauthorized" in stderr:
+            return False, f"Access denied listing nodegroups for cluster {cluster_name}: {list_res.stderr}"
+        if list_res.returncode == -124:
+            return False, f"Timeout listing nodegroups for cluster {cluster_name}"
+        return False, f"Error listing nodegroups for cluster {cluster_name}: {list_res.stderr}"
+
+    try:
+        nodegroups = json.loads(list_res.stdout).get("nodegroups", [])
+    except Exception as exc:
+        return False, f"Malformed json from list-nodegroups for {cluster_name}: {exc}"
+
+    if not nodegroups:
+        return True, "No attached nodegroups found"
+
+    expected_project = "brace-platform-public-demo"
+    expected_run_id = run_id
+
+    for ng in nodegroups:
+        desc_cmd = ["aws", "eks", "describe-nodegroup", "--cluster-name", cluster_name, "--nodegroup-name", ng, "--region", aws_region]
+        desc_res = run_command(desc_cmd, evidence_dir=evidence_dir)
+        if desc_res.returncode != 0:
+            stderr = desc_res.stderr.lower()
+            if "resourcenotfoundexception" in stderr:
+                continue
+            if "accessdenied" in stderr or "unauthorized" in stderr:
+                return False, f"Access denied describing nodegroup {ng}: {desc_res.stderr}"
+            if desc_res.returncode == -124:
+                return False, f"Timeout describing nodegroup {ng}"
+            return False, f"Error describing nodegroup {ng}: {desc_res.stderr}"
+
+        try:
+            ng_data = json.loads(desc_res.stdout).get("nodegroup", {})
+            tags = ng_data.get("tags", {})
+        except Exception as exc:
+            return False, f"Malformed json describing nodegroup {ng}: {exc}"
+
+        if tags.get("Project") != expected_project or tags.get("brace.io/run-id") != expected_run_id:
+            return False, f"Refusing to delete nodegroup {ng}: ownership tags mismatch (Project={tags.get('Project')}, run_id={tags.get('brace.io/run-id')})"
+
+        del_cmd = ["aws", "eks", "delete-nodegroup", "--cluster-name", cluster_name, "--nodegroup-name", ng, "--region", aws_region]
+        del_res = run_command(del_cmd, evidence_dir=evidence_dir)
+        if del_res.returncode != 0:
+            stderr = del_res.stderr.lower()
+            if "resourcenotfoundexception" in stderr:
+                continue
+            if "accessdenied" in stderr or "unauthorized" in stderr:
+                return False, f"Access denied deleting nodegroup {ng}: {del_res.stderr}"
+            if del_res.returncode == -124:
+                return False, f"Timeout initiating deletion for nodegroup {ng}"
+            return False, f"Error initiating deletion for nodegroup {ng}: {del_res.stderr}"
+
+        start_poll = time.monotonic()
+        while True:
+            poll_res = run_command(desc_cmd, evidence_dir=evidence_dir)
+            if poll_res.returncode != 0:
+                if "resourcenotfoundexception" in poll_res.stderr.lower():
+                    break
+                if "accessdenied" in poll_res.stderr.lower() or "unauthorized" in poll_res.stderr.lower():
+                    return False, f"Access denied polling nodegroup {ng}: {poll_res.stderr}"
+                if poll_res.returncode == -124:
+                    return False, f"Timeout polling nodegroup {ng}"
+                return False, f"Error polling nodegroup {ng}: {poll_res.stderr}"
+
+            if time.monotonic() - start_poll > max_poll_seconds:
+                return False, f"Nodegroup {ng} deletion timed out after {max_poll_seconds}s"
+
+            time.sleep(poll_interval_seconds)
+
+    return True, "All attached nodegroups deleted"
 
 
 def audit_cloud_residue(
@@ -822,21 +907,34 @@ def execute_public_live_demo(
                             if v and not cloud_resources.get(k):
                                 cloud_resources[k] = v
 
-                    print(f"Tearing down demonstration infrastructure in region {aws_region}...")
-                    try:
-                        run_command(
-                            ["terraform", "destroy", "-auto-approve", "-no-color"] + tf_destroy_vars,
-                            cwd=tf_dir,
-                            evidence_dir=evidence_dir,
-                            timeout=TIMEOUT_TERRAFORM_DESTROY,
-                            check=True,
-                        )
-                        stages["TEARDOWN"] = "PASS"
-                    except Exception as exc:
-                        print(f"Error during Terraform destroy: {exc}", file=sys.stderr)
-                        errors.append(f"Terraform destroy failure: {exc}")
+                    print(f"Checking for attached nodegroups for cluster {unique_cluster_name} in region {aws_region}...")
+                    ng_clean, ng_msg = cleanup_attached_nodegroups(
+                        cluster_name=unique_cluster_name,
+                        run_id=run_id,
+                        aws_region=aws_region,
+                        evidence_dir=evidence_dir,
+                    )
+                    if not ng_clean:
+                        print(f"Error during pre-destroy nodegroup cleanup: {ng_msg}", file=sys.stderr)
+                        errors.append(f"Pre-destroy nodegroup cleanup failure: {ng_msg}")
                         stages["TEARDOWN"] = "FAIL"
                         stages["OVERALL_RESULT"] = "FAIL"
+                    else:
+                        print(f"Tearing down demonstration infrastructure in region {aws_region}...")
+                        try:
+                            run_command(
+                                ["terraform", "destroy", "-auto-approve", "-no-color"] + tf_destroy_vars,
+                                cwd=tf_dir,
+                                evidence_dir=evidence_dir,
+                                timeout=TIMEOUT_TERRAFORM_DESTROY,
+                                check=True,
+                            )
+                            stages["TEARDOWN"] = "PASS"
+                        except Exception as exc:
+                            print(f"Error during Terraform destroy: {exc}", file=sys.stderr)
+                            errors.append(f"Terraform destroy failure: {exc}")
+                            stages["TEARDOWN"] = "FAIL"
+                            stages["OVERALL_RESULT"] = "FAIL"
                 else:
                     stages["TEARDOWN"] = "SKIP"
             finally:

@@ -794,3 +794,218 @@ def test_local_detached_container_fails_without_cluster_config():
         capture_output=True,
     )
     assert "ConfigException" in proc.stderr or "Service host/port is not set" in proc.stderr
+
+
+def test_terraform_apply_receives_explicit_2700_second_timeout():
+    assert live_demo.TIMEOUT_TERRAFORM_APPLY == 2700.0
+
+    calls: list[dict[str, Any]] = []
+
+    def mock_run_command(cmd, **kwargs):
+        calls.append({"cmd": cmd, "kwargs": kwargs})
+        if "apply" in cmd:
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+        if "output" in cmd:
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"cluster_name": {"value": "test"}}), stderr="", start_time="", end_time="")
+        return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tf_dir = os.path.join(tmpdir, "infra", "terraform")
+        k8s_dir = os.path.join(tmpdir, "k8s", "verifier")
+        os.makedirs(tf_dir, exist_ok=True)
+        os.makedirs(k8s_dir, exist_ok=True)
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_command):
+            with patch("scripts.live_demo.validate_image_digest_pinning"):
+                try:
+                    live_demo.execute_public_live_demo(
+                        workload_image="ghcr.io/test/workload@sha256:" + ("0" * 64),
+                        verifier_image="ghcr.io/test/verifier@sha256:" + ("0" * 64),
+                        repo_root=tmpdir,
+                        dry_run=False,
+                    )
+                except Exception:
+                    pass
+
+    apply_calls = [c for c in calls if "apply" in c["cmd"] and "-auto-approve" in c["cmd"]]
+    assert len(apply_calls) == 1
+    assert apply_calls[0]["kwargs"].get("timeout") == 2700.0
+
+
+def test_cleanup_attached_nodegroups_handles_cluster_absence():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_run_cmd(cmd, **kwargs):
+            if "list-nodegroups" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="ResourceNotFoundException: No cluster found", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            success, msg = live_demo.cleanup_attached_nodegroups("test-cluster", "test-run", "ap-south-1", tmpdir)
+            assert success is True
+            assert "absent" in msg.lower()
+
+
+def test_cleanup_attached_nodegroups_zero_attached():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_run_cmd(cmd, **kwargs):
+            if "list-nodegroups" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"nodegroups": []}), stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            success, msg = live_demo.cleanup_attached_nodegroups("test-cluster", "test-run", "ap-south-1", tmpdir)
+            assert success is True
+            assert "no attached nodegroups" in msg.lower()
+
+
+def test_cleanup_attached_nodegroups_discovers_verifies_deletes_and_polls():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        poll_count = 0
+        delete_called = False
+        deleted_ngs: list[str] = []
+
+        def mock_run_cmd(cmd, **kwargs):
+            nonlocal poll_count, delete_called
+            if "list-nodegroups" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"nodegroups": ["ng-demo-1"]}), stderr="", start_time="", end_time="")
+            if "describe-nodegroup" in cmd:
+                if delete_called:
+                    poll_count += 1
+                    if poll_count >= 2:
+                        return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="ResourceNotFoundException", start_time="", end_time="")
+                    return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"nodegroup": {"nodegroupName": "ng-demo-1", "status": "DELETING"}}), stderr="", start_time="", end_time="")
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({
+                    "nodegroup": {
+                        "nodegroupName": "ng-demo-1",
+                        "status": "CREATING",
+                        "tags": {
+                            "Project": "brace-platform-public-demo",
+                            "brace.io/run-id": "run-xyz-123",
+                        }
+                    }
+                }), stderr="", start_time="", end_time="")
+            if "delete-nodegroup" in cmd:
+                delete_called = True
+                deleted_ngs.append("ng-demo-1")
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            success, msg = live_demo.cleanup_attached_nodegroups(
+                cluster_name="test-cluster",
+                run_id="run-xyz-123",
+                aws_region="ap-south-1",
+                evidence_dir=tmpdir,
+                poll_interval_seconds=0.01,
+            )
+            assert success is True
+            assert "deleted" in msg.lower()
+            assert "ng-demo-1" in deleted_ngs
+            assert poll_count >= 2
+
+
+def test_cleanup_attached_nodegroups_ownership_mismatch_refuses_deletion():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        del_attempted = False
+
+        def mock_run_cmd(cmd, **kwargs):
+            nonlocal del_attempted
+            if "list-nodegroups" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({"nodegroups": ["ng-foreign"]}), stderr="", start_time="", end_time="")
+            if "describe-nodegroup" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout=json.dumps({
+                    "nodegroup": {
+                        "nodegroupName": "ng-foreign",
+                        "status": "ACTIVE",
+                        "tags": {
+                            "Project": "other-project",
+                            "brace.io/run-id": "other-run",
+                        }
+                    }
+                }), stderr="", start_time="", end_time="")
+            if "delete-nodegroup" in cmd:
+                del_attempted = True
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            success, msg = live_demo.cleanup_attached_nodegroups(
+                cluster_name="test-cluster",
+                run_id="run-expected-123",
+                aws_region="ap-south-1",
+                evidence_dir=tmpdir,
+            )
+            assert success is False
+            assert "refusing to delete" in msg.lower()
+            assert del_attempted is False
+
+
+def test_cleanup_attached_nodegroups_errors_fail_closed():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        def mock_access_denied(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="AccessDeniedException: not authorized", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_access_denied):
+            success, msg = live_demo.cleanup_attached_nodegroups("test-cluster", "run-1", "ap-south-1", tmpdir)
+            assert success is False
+            assert "access denied" in msg.lower()
+
+        def mock_timeout(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=-124, stdout="", stderr="timed out", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_timeout):
+            success, msg = live_demo.cleanup_attached_nodegroups("test-cluster", "run-1", "ap-south-1", tmpdir)
+            assert success is False
+            assert "timeout" in msg.lower()
+
+        def mock_malformed(cmd, **kwargs):
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="not valid json", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_malformed):
+            success, msg = live_demo.cleanup_attached_nodegroups("test-cluster", "run-1", "ap-south-1", tmpdir)
+            assert success is False
+            assert "malformed json" in msg.lower()
+
+
+def test_teardown_blocks_destroy_and_preserves_primary_failure_if_nodegroup_cleanup_fails():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        tf_dir = os.path.join(tmpdir, "infra", "terraform")
+        k8s_dir = os.path.join(tmpdir, "k8s", "verifier")
+        os.makedirs(tf_dir, exist_ok=True)
+        os.makedirs(k8s_dir, exist_ok=True)
+
+        destroy_called = False
+
+        def mock_run_cmd(cmd, **kwargs):
+            nonlocal destroy_called
+            if "init" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            if "apply" in cmd:
+                raise subprocess.TimeoutExpired(cmd=cmd, timeout=2700.0)
+            if "list-nodegroups" in cmd:
+                return live_demo.CommandResult(args=cmd, returncode=254, stdout="", stderr="AccessDeniedException", start_time="", end_time="")
+            if "destroy" in cmd:
+                destroy_called = True
+                return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+            return live_demo.CommandResult(args=cmd, returncode=0, stdout="", stderr="", start_time="", end_time="")
+
+        with patch("scripts.live_demo.run_command", side_effect=mock_run_cmd):
+            with patch("scripts.live_demo.validate_image_digest_pinning"):
+                with patch("scripts.live_demo.audit_cloud_residue", return_value=("DIRTY", ["Residue found"])):
+                    code = live_demo.execute_public_live_demo(
+                        workload_image="ghcr.io/test/workload@sha256:" + ("0" * 64),
+                        verifier_image="ghcr.io/test/verifier@sha256:" + ("0" * 64),
+                        repo_root=tmpdir,
+                        dry_run=False,
+                    )
+                    assert code == 1
+                    assert destroy_called is False
+
+        evidence_base = os.path.join(tmpdir, ".demo", "evidence")
+        run_ids = os.listdir(evidence_base)
+        summary_path = os.path.join(evidence_base, run_ids[0], "summary.json")
+        with open(summary_path) as f:
+            summary = json.load(f)
+            assert summary["stages"]["TEARDOWN"] == "FAIL"
+            assert any("Command timed out after 2700.0" in err or "timed out" in err.lower() for err in summary["errors"])
+            assert any("Pre-destroy nodegroup cleanup failure" in err for err in summary["errors"])
