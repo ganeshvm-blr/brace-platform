@@ -17,3 +17,11 @@ dist/
 *.log
 .DS_Store
 Thumbs.db
+
+# Live demo evidence, state, plans, and credentials
+.demo/
+.terraform/
+*.tfstate
+*.tfstate.*
+*.tfplan
+*kubeconfig*

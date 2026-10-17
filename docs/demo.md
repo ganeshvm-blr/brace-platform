@@ -170,7 +170,7 @@ All packaging tests pass, confirming metadata validity, dependency closure, and 
 
 ## Running the Complete Suite
 
-To execute all 42 tests across the public platform:
+To execute all tests across the public platform:
 
 ```bash
 python -m pytest tests -v -p no:cacheprovider
@@ -178,5 +178,37 @@ python -m pytest tests -v -p no:cacheprovider
 
 Expected result:
 ```text
-42 passed; execution time varies.
+63 passed; execution time varies.
 ```
+
+---
+
+## Public Live AWS Demonstration Runner
+
+The public repository provides a standalone live-demonstration runner script at `scripts/live_demo.py` designed to execute against a real AWS EKS cluster without private dependencies:
+
+- **Terraform Automation**: Provisions a minimal VPC and EKS cluster in `infra/terraform`.
+- **Public Workload Deployment**: Applies the approved public sample workload from `workloads/demo-app` using a digest-pinned image reference (`@sha256:`).
+- **Zero Workstation Uploads**: Workloads are pre-published to GitHub Container Registry (GHCR) and pulled by EKS nodes directly from public registry mirrors.
+- **Real Operational Observations**: Collects genuine Kubernetes deployment readiness and service HTTP responsiveness observations.
+- **Sanitized Evidence Retention**: Outputs command execution transcripts, timestamps, and stage statuses to `.demo/evidence/<run-id>/summary.json`.
+- **Explicit Non-Production Statement**: The runner outputs:
+  `"No production recoverability decision was made."`
+- **Ownership Cleanup & Teardown**: Removes the run-scoped namespace under explicit ownership metadata and tears down the Terraform stack upon completion.
+
+### Local Simulation (Dry-Run)
+```bash
+python scripts/live_demo.py --dry-run
+```
+
+### Live AWS Execution (Requires authorized AWS credentials and published images)
+```bash
+python scripts/live_demo.py \
+  --workload-image ghcr.io/<org>/brace-platform-demo-workload@sha256:<64-char-hex-digest> \
+  --verifier-image ghcr.io/<org>/brace-platform-verifier@sha256:<64-char-hex-digest> \
+  --aws-region ap-south-1
+```
+
+### Evidence Separation
+- **Sanitized Exportable Evidence**: Retained directly in `.demo/evidence/<run-id>/` (`summary.json`, `summary.md`, and `verifier-result.json`).
+- **Raw Command Diagnostics**: Preserved in `.demo/evidence/<run-id>/diagnostics/` containing per-command subprocess outputs and exit codes.

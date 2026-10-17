@@ -1,0 +1,49 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: ${JOB_NAME}
+  namespace: default
+  labels:
+    app.kubernetes.io/managed-by: brace
+    brace.io/run-id: "${RUN_ID}"
+spec:
+  backoffLimit: 0
+  activeDeadlineSeconds: 600
+  template:
+    metadata:
+      name: ${POD_NAME}
+      labels:
+        app.kubernetes.io/managed-by: brace
+        brace.io/run-id: "${RUN_ID}"
+    spec:
+      restartPolicy: Never
+      serviceAccountName: ${VERIFIER_SERVICE_ACCOUNT}
+      automountServiceAccountToken: true
+      securityContext:
+        runAsNonRoot: true
+        runAsUser: 10001
+        runAsGroup: 10001
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: verifier
+          image: ${VERIFIER_IMAGE}
+          imagePullPolicy: IfNotPresent
+          command:
+            - python
+            - /app/verifier.py
+            - --request-file
+            - /etc/brace/request.json
+          securityContext:
+            allowPrivilegeEscalation: false
+            readOnlyRootFilesystem: false
+            capabilities:
+              drop: ["ALL"]
+          volumeMounts:
+            - name: request-volume
+              mountPath: /etc/brace
+              readOnly: true
+      volumes:
+        - name: request-volume
+          configMap:
+            name: ${CONFIGMAP_NAME}
