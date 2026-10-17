@@ -9,6 +9,7 @@ import uuid
 from unittest.mock import MagicMock, patch
 
 import pytest
+import shutil
 
 _REPO_ROOT = pathlib.Path(__file__).resolve().parent.parent
 if str(_REPO_ROOT) not in sys.path:
@@ -309,6 +310,8 @@ def test_residue_auditing_refuses_default_state():
 
 
 def test_terraform_show_real_cli_regression_without_aws():
+    if not shutil.which("terraform"):
+        pytest.skip("terraform CLI is not installed or available on PATH")
     with tempfile.TemporaryDirectory() as tmpdir:
         tf_file = os.path.join(tmpdir, "main.tf")
         with open(tf_file, "w", encoding="utf-8") as f:
@@ -769,13 +772,23 @@ def test_k8s_cleanup_exception_and_interruption_still_executes_teardown():
 
 
 def test_local_detached_container_fails_without_cluster_config():
+    if not shutil.which("docker"):
+        pytest.skip("docker CLI is not installed or available on PATH")
+    inspect_proc = subprocess.run(
+        ["docker", "image", "inspect", "brace-verifier:local"],
+        capture_output=True,
+        text=True,
+    )
+    if inspect_proc.returncode != 0:
+        pytest.skip("local image 'brace-verifier:local' is not present in Docker storage")
+
     run_id = str(uuid.uuid4())
     img = "brace-demo-workload:local@sha256:" + ("a" * 64)
     payload = live_demo.build_verification_request_payload(run_id, img)
     req_json_str = json.dumps(payload)
 
     proc = subprocess.run(
-        ["docker", "run", "--rm", "-i", "brace-verifier:local"],
+        ["docker", "run", "--rm", "-i", "--pull=never", "brace-verifier:local"],
         input=req_json_str,
         text=True,
         capture_output=True,
