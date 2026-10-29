@@ -25,6 +25,10 @@ Brace Platform addresses this problem by decoupling operational infrastructure o
 
 ## Two Demonstration Paths
 
+![Brace Platform local and verified AWS demonstration paths](docs/assets/brace-platform-two-path-overview.png)
+
+*Brace Platform local package demonstration and verified AWS demonstration harness overview.*
+
 The repository exposes two related but architecturally separate demonstration surfaces:
 
 1. **Installable Public Package (`python -m brace.demo`)**:

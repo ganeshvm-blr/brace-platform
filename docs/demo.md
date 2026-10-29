@@ -10,7 +10,9 @@ This document provides a timed, five-minute engineering walkthrough of Brace Pla
 >
 > In both demonstrations, the evaluator is a presentation double returning fixed affirmed standing. *No production recoverability decision was made.* Neither demonstration includes backup restoration, volume snapshots, or the proprietary production evaluator.
 
-For an architectural view of both demonstration surfaces, see the [Architecture Overview](assets/brace-platform-architecture.png).
+![Brace Platform local and verified AWS demonstration paths](assets/brace-platform-two-path-overview.png)
+
+*Brace Platform demonstration paths: local package demonstration using test doubles and verified AWS demonstration harness.*
 
 ---
 

@@ -12,7 +12,7 @@ Please note the following boundaries:
 - **External Evaluator Boundary**: The production evaluator, scoring logic, and decision algorithms are external and omitted. The demonstration uses an illustrative test double returning fixed affirmed standing. *No production recoverability decision was made.*
 - **Sanitized Evidence**: All AWS account IDs, ARNs, VPC IDs, subnet IDs, security group IDs, NAT gateway IDs, KMS key IDs, and credentials are completely sanitized. Evidence is stored locally on disk and is **not** uploaded to Amazon S3.
 
-For visual architecture, see the [Architecture Overview](assets/brace-platform-architecture.png).
+For visual demonstration lifecycle, see the [AWS Lifecycle Diagram](assets/brace-platform-aws-lifecycle.png).
 
 ---
 
@@ -44,6 +44,10 @@ The standalone demonstration harness operates against standard AWS and container
 ---
 
 ## Architecture and Boundary Diagram
+
+![Brace Platform AWS Lifecycle](assets/brace-platform-aws-lifecycle.png)
+
+*Verified AWS demonstration harness: temporary infrastructure, real in-cluster observations, ownership-scoped cleanup and independent residue auditing.*
 
 ```mermaid
 flowchart TD

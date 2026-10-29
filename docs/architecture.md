@@ -8,11 +8,33 @@ This document specifies the technical architecture of Brace Platform across two 
 
 The platform's operational responsibility ends where decision making begins. Brace Platform executes and observes infrastructure and workloads; it does not decide recoverability. The evaluator implementation is external by design and is not included in this repository. Neither layer implements backup restoration or contains the production evaluator.
 
-## Architecture at a Glance
+## Visual Architecture Guide
+
+The architecture and demonstration surfaces of Brace Platform are documented across three complementary visual models:
+
+### 1. Two-Path Overview: Product and Demonstration Boundaries
+
+The high-level boundary model separating the verified AWS demonstration harness from the local package demonstration using in-process test doubles.
+
+![Brace Platform Two-Path Overview](assets/brace-platform-two-path-overview.png)
+
+*Brace Platform demonstration overview showing the verified AWS demonstration harness (top lane) and the local package demonstration using in-process test doubles (bottom lane). Source definition maintained in [brace-platform-two-path-overview-source.md](assets/brace-platform-two-path-overview-source.md).*
+
+### 2. AWS Demonstration Lifecycle: Live Execution Path
+
+The self-cleaning five-stage execution path of the standalone AWS demonstration harness across temporary VPC, Amazon EKS, in-cluster verification, and residue audit.
+
+![Brace Platform AWS Lifecycle](assets/brace-platform-aws-lifecycle.png)
+
+*Verified AWS demonstration harness: temporary infrastructure, real in-cluster observations, ownership-scoped cleanup and independent residue auditing. Source definition maintained in [brace-platform-aws-lifecycle-source.md](assets/brace-platform-aws-lifecycle-source.md).*
+
+### 3. Detailed Architecture: Component-Level Reference
+
+The detailed structural component and protocol wiring diagram across both demonstration surfaces.
 
 ![Brace Platform Architecture](assets/brace-platform-architecture.png)
 
-*Architectural overview detailing the verified live AWS demonstration harness (top path) and the local package demonstration (bottom path). Source definition maintained in [brace-platform-architecture-source.md](assets/brace-platform-architecture-source.md).*
+*Architectural reference detailing component wiring, observation models, and boundary contracts for both demonstration paths. Source definition maintained in [brace-platform-architecture-source.md](assets/brace-platform-architecture-source.md).*
 
 ```
 Kubernetes execution and observation
