@@ -18,7 +18,7 @@ The architecture presents two related but separate demonstration surfaces:
 
 > **Universal Boundary Notice**
 > *No production recoverability decision was made.*
-> Neither path implements backup restoration, volume snapshots, or storage recovery, and neither includes the proprietary production recoverability evaluator.
+> Neither path implements backup restoration, and neither includes the proprietary production recoverability evaluator.
 
 ---
 

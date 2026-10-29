@@ -30,7 +30,7 @@ The standalone live demonstration harness (`scripts/live_demo.py` & `infra/terra
 
 | Public Claim | Implementation Reference | Verification Evidence / Command | Evidence Level | What It Establishes | What It Does Not Establish |
 |---|---|---|---|---|---|
-| **Real AWS Infrastructure Provisioning** | `infra/terraform/main.tf`, `scripts/live_demo.py` | Freeze record: commit `e8329b6`, Run ID `895844a6-afb2-45e1-a2c6-30c1229dc844` (`ap-south-1`) | Live AWS Execution | Successfully provisioned temporary AWS VPC, 2 public & 2 private subnets, NAT gateway, and EKS cluster with 1x `t3.small` node. | Does not prove multi-region provisioning, high availability, or persistence across runs. |
+| **Real AWS Infrastructure Provisioning** | `infra/terraform/main.tf`, `scripts/live_demo.py` | Freeze record: commit `e8329b6`, Run ID `895844a6-afb2-45e1-a2c6-30c1229dc844` (`ap-south-1`) | Live AWS Execution | Successfully provisioned temporary AWS VPC, 2 public & 2 private subnets, NAT gateway, and EKS cluster with 1x `t3.small` node. | Does not prove multi-region provisioning or persistent cluster operation. |
 | **Real Readiness Observation** | `scripts/live_demo.py`, `workloads/demo-app/` | Freeze record section 3: Deployment `demo-workload` ready condition observed | Live AWS Execution | Proves Kubernetes deployment converged to `availableReplicas == 1` within bounded deadline on live EKS. | Does not prove application health beyond Kubernetes deployment ready status. |
 | **Real HTTP 200 Observation** | `scripts/live_demo.py`, verifier image | Freeze record section 3: In-cluster HTTP probe returned status code `200` | Live AWS Execution | In-cluster verifier Job probed the service endpoint and observed real HTTP status `200 OK`. | Does not prove application business logic correctness or high load capacity. |
 | **Kubernetes Cleanup** | `scripts/live_demo.py` | Freeze record section 2: `K8S_CLEANUP` stage `PASS` | Live AWS Execution | Deleted run-scoped Namespace, Job, ConfigMap, ServiceAccount, and RBAC roles under ownership labels. | Does not clean cluster-wide resources not labeled with run ownership. |
@@ -68,21 +68,18 @@ Packaging closure and supply chain checks are enforced by dedicated unit test gu
 
 ---
 
-## 5. Unsupported Claims and Explicit Exclusions
+## 5. Explicit Scope and Boundary Exclusions
 
 The following claims are explicitly outside the scope of Brace Platform:
 
-1. **Backup-Restoration and Storage-Recovery Exclusion**:
-   Neither the installable public package nor the verified live AWS demonstration harness implements backup restoration, volume snapshots, storage recovery, database transaction replays, or integration with Velero or CSI controllers. The platform deploys and observes synthetic workloads only.
+1. **Backup-Restoration Exclusion**:
+   Neither the installable public package nor the verified live AWS demonstration harness implements backup restoration. The platform deploys and observes synthetic workloads only.
 
 2. **External Evaluator and Production Decision Exclusion**:
    Neither demonstration path includes the proprietary recoverability evaluator, scoring heuristics, inference models, or decision engine. Both demonstrations use presentation doubles returning fixed affirmed standing. *No production recoverability decision was made.*
 
 3. **No Live Cluster Proof from Unit Tests**:
-   The 75 passing unit/composition tests execute entirely in-process against test doubles. They verify state transitions, invariants, and failure handling, but do not constitute live-cluster operational proof.
+   The unit and composition tests execute entirely in-process against test doubles. They verify state transitions, invariants, and failure handling, but do not constitute live-cluster operational proof.
 
 4. **Phase Success Is Not Observation Outcome**:
    An operational phase recording `succeeded=True` indicates only that the lifecycle phase executed without an unhandled infrastructure error. It is distinct from whether the observed check condition evaluated to an affirmative or negative result.
-
-5. **No Continuous Assurance or Fleet Guarantees**:
-   The platform executes single, bounded runs. Continuous verification, fleet assurance, RTO/RPO certifications, and cross-region failover are future roadmap horizons, not current capabilities.

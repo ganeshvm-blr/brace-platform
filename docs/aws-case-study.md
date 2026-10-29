@@ -8,7 +8,7 @@ Please note the following boundaries:
 - **Demonstration Distinction**: The repository provides two separate surfaces:
   1. The **installable public package (`brace`)**, which does not provision cloud resources and executes locally against in-process test doubles.
   2. The **verified AWS demonstration harness (`scripts/live_demo.py` & `infra/terraform`)**, a standalone, explicitly invoked harness that provisions temporary Amazon Web Services (AWS) infrastructure to demonstrate real in-cluster observation.
-- **No Backup Restoration**: Neither the package nor the live AWS demonstration implements backup restoration, volume snapshots, storage recovery, or database replays.
+- **No Backup Restoration**: Neither the package nor the live AWS demonstration implements backup restoration or contains the production evaluator.
 - **External Evaluator Boundary**: The production evaluator, scoring logic, and decision algorithms are external and omitted. The demonstration uses an illustrative test double returning fixed affirmed standing. *No production recoverability decision was made.*
 - **Sanitized Evidence**: All AWS account IDs, ARNs, VPC IDs, subnet IDs, security group IDs, NAT gateway IDs, KMS key IDs, and credentials are completely sanitized. Evidence is stored locally on disk and is **not** uploaded to Amazon S3.
 
@@ -127,29 +127,29 @@ See [docs/public-demo-freeze.md](public-demo-freeze.md) for the complete auditab
 
 ---
 
-## What This Case Study Does Not Claim
+## Current Public Boundary
 
-This case study explicitly excludes the following claims:
-- It does not claim backup restoration, snapshot replay, or storage recovery.
-- It does not claim database consistency, state persistence, or transaction log recovery.
-- It does not claim Recovery Time Objective (RTO) or Recovery Point Objective (RPO) compliance.
-- It does not claim multi-region disaster recovery or cross-region replication.
-- It does not claim load testing, throughput benchmarking, or scale certification.
-- It does not claim mathematical or operational correctness of external evaluators.
-- It does not claim that a production recoverability decision was made.
+- The public package covers request validation, namespace orchestration, workload application, bounded readiness and HTTP responsiveness observation, immutable evidence projection, the external evaluator boundary, failure preservation, and ownership-scoped cleanup.
+- The installable package and local demonstration do not perform backup restoration or contain the production evaluator.
+- The separate AWS demonstration harness validates public orchestration and observation mechanics on temporary infrastructure.
+- Technical claims are limited to the verification matrix and frozen public AWS demonstration record.
+- *No production recoverability decision was made.*
 
 ---
 
-## Interview Discussion Topics
+## Architecture Decisions
 
-1. **Decoupling Orchestration from Evaluation**:
-   Separating workload execution and observation from decision logic ensures that platform infrastructure code remains inspectable and auditable, while decision heuristics remain independent and substitutable.
+1. **Separation of Orchestration from Evaluation**:
+   Decoupling infrastructure orchestration and workload observation from the decision logic ensures that the platform runtime remains auditable and inspectable, while evaluation models remain external, substitutable components.
 
-2. **Supply-Chain Digest Pinning**:
-   Requiring strict `@sha256:` hexadecimal digest pinning guarantees that workloads executed in cluster environments match exactly the audited build artifacts, eliminating mutable tag vulnerabilities.
+2. **Run-Scoped Namespace Isolation**:
+   Isolating each verification run within a deterministically named, ownership-labeled namespace prevents cross-run interference and enables safe, targeted cleanup.
 
-3. **In-Cluster Responsiveness vs Manifest Application**:
-   Proving that a deployment converged and its service responded with HTTP status 200 provides operational certainty that simple manifest application cannot offer.
+3. **Distinction Between Phase Execution and Observation Outcome**:
+   An operational phase recording `succeeded=True` indicates only that the lifecycle phase executed without an infrastructure crash; it is distinct from whether an observation evaluated to an affirmative or negative result.
 
-4. **Fail-Closed Teardown and Independent Residue Auditing**:
-   Combining automated Terraform destruction with an out-of-band AWS CLI residue audit ensures that transient demonstration infrastructure leaves zero orphaned cloud assets.
+4. **Primary-Failure Preservation Alongside Cleanup Errors**:
+   If an operational check fails and subsequent namespace cleanup also encounters an error, the coordinator preserves the primary error as the principal cause while retaining the cleanup error on `cleanup_failure`, preventing root causes from being masked.
+
+5. **Public Platform Boundary and External Decision Implementation**:
+   The repository defines the structural `RecoverabilityEvaluator` protocol and observation models; proprietary assessment logic, scoring algorithms, and recoverability decision engines are external to the public platform.

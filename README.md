@@ -34,7 +34,7 @@ The repository exposes two related but architecturally separate demonstration su
    A separately invoked, standalone demonstration harness that automates temporary AWS infrastructure (VPC, public/private subnets, NAT gateway, Amazon EKS, and managed node group), pulls digest-pinned images from GitHub Container Registry (GHCR), observes real Kubernetes readiness and in-cluster HTTP 200 responses, stores evidence locally on disk, deletes Kubernetes resources, destroys Terraform infrastructure, and confirms zero cloud residue through an independent audit.
 
 > **Architecture Boundary Notice**
-> The installable public package does not provision AWS infrastructure. The repository also contains a separate, explicitly invoked Terraform demonstration harness that has been validated on a temporary Amazon EKS environment. Neither path implements backup restoration, volume snapshots, or storage recovery, and neither includes the proprietary production recoverability evaluator.
+> The installable public package does not provision AWS infrastructure. The repository also contains a separate, explicitly invoked Terraform demonstration harness that has been validated on a temporary Amazon EKS environment. Neither path implements backup restoration or contains the proprietary production recoverability evaluator.
 
 ## Local Package Quick Start (5 Minutes)
 
@@ -138,11 +138,10 @@ The system enforces a strict one-way dependency boundary:
 
 ## What Is Intentionally Excluded
 
-- **No Backup Restoration**: The platform applies and observes an approved workload bundle; it does not restore backups, replay snapshots, integrate with Velero, or recover storage systems.
+- **No Backup Restoration**: The platform applies and observes an approved workload bundle; it does not restore backups or interface with external backup tools.
 - **No Production Recoverability Decision Algorithm**: The proprietary evaluator, scoring heuristics, and recoverability decision engines are intentionally external.
 - **No Cloud Infrastructure in Package**: The installable package (`brace`) contains no AWS provisioning automation; cloud automation is restricted to the standalone demonstration harness (`scripts/live_demo.py` + `infra/terraform`).
 - **No Live Cluster Contact in Package Tests**: The package unit and composition test suite runs entirely in-process against test doubles.
-- **No Continuous Recoverability Verification**: The platform executes single bounded verification runs; continuous fleet assurance is an uncommitted future capability horizon.
 
 ## Deeper Documentation
 
@@ -151,7 +150,6 @@ The system enforces a strict one-way dependency boundary:
 - [docs/verification-matrix.md](docs/verification-matrix.md): Exhaustive matrix mapping every public architectural and operational claim to concrete verification evidence and boundaries.
 - [docs/aws-case-study.md](docs/aws-case-study.md): Sanitized deployment case study detailing the verified AWS EKS demonstration context.
 - [docs/public-demo-freeze.md](docs/public-demo-freeze.md): Auditable freeze record documenting verified run facts on AWS EKS (`ap-south-1`).
-- [docs/public-roadmap.md](docs/public-roadmap.md): Non-committed future capability horizons and core product boundaries.
 
 ## Development and Verification Commands
 
@@ -201,3 +199,14 @@ MANIFEST.in                Source-distribution file selection
 - **Live AWS Demonstration**: Validated end-to-end on AWS EKS; milestone frozen; zero cloud residue confirmed.
 - **Execution Authority**: `main` branch is authoritative; no further AWS execution is authorized.
 - **Evaluator Decision**: *No production recoverability decision was made.*
+
+## Licence
+
+Copyright © 2026 Ganesh V M. All rights reserved.
+
+Brace Platform is public source-available software, not open-source software.
+The repository may be viewed for evaluation, but copying, modification,
+redistribution, derivative works, commercial use, and production use are not
+permitted unless separately authorised in writing.
+
+See [LICENSE](LICENSE) for the controlling terms.

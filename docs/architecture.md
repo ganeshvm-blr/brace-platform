@@ -6,7 +6,7 @@ This document specifies the technical architecture of Brace Platform across two 
 1. **Layer A — Product and Package Architecture**: The installable Python package (`brace`) orchestrating request validation, run-scoped namespace lifecycles, workload deployment, bounded operational observation, immutable evidence projection, and boundary delegation across the `RecoverabilityEvaluator` protocol.
 2. **Layer B — Verified AWS Demonstration Architecture**: The standalone demonstration harness (`scripts/live_demo.py` and `infra/terraform`) orchestrating temporary Amazon Web Services (AWS) infrastructure, Amazon Elastic Kubernetes Service (EKS), in-cluster observation, structured local evidence, and teardown with residue verification.
 
-The platform's operational responsibility ends where decision making begins. Brace Platform executes and observes infrastructure and workloads; it does not decide recoverability. The evaluator implementation is external by design and is not included in this repository. Neither layer implements backup restoration, volume snapshots, database recovery, or integration with tools like Velero, Prometheus, Grafana, or Argo CD.
+The platform's operational responsibility ends where decision making begins. Brace Platform executes and observes infrastructure and workloads; it does not decide recoverability. The evaluator implementation is external by design and is not included in this repository. Neither layer implements backup restoration or contains the production evaluator.
 
 ## Architecture at a Glance
 
@@ -244,12 +244,8 @@ The platform holds no reference to evaluator heuristics, rules, scoring algorith
 ## 6. What Is Intentionally External
 
 The following capabilities are explicitly outside the scope of Brace Platform:
-- **No Backup Restoration**: The platform applies and observes workloads; it does not implement backup restoration, volume snapshots, storage recovery, or database replays.
-- **No Velero / CSI Integration**: The platform does not interface with Velero, CSI snapshot controllers, or cloud volume APIs.
+- **No Backup Restoration**: The platform applies and observes workloads; it does not implement backup restoration.
 - **No Production Evaluator**: The proprietary decision engine that evaluates operational evidence against recovery standards is external.
-- **No Monitoring Stack**: Prometheus, Grafana, OpenTelemetry, and alert managers are not included.
-- **No GitOps Engine**: Argo CD, Flux, and deployment pipelines are not included.
-- **No Amazon ECR**: The public demo uses GitHub Container Registry (GHCR).
+- **No Amazon ECR**: The demonstration harness uses GitHub Container Registry (GHCR).
 - **No Amazon S3 Evidence Storage**: Evidence is written exclusively to local disk.
-- **No Live Cluster Proof from Unit Tests**: The 75 passing unit/composition tests execute against in-process test doubles.
-- **No Continuous Assurance**: Continuous or recurring verification across fleets represents an uncommitted future roadmap horizon.
+- **No Live Cluster Proof from Unit Tests**: The unit and composition tests execute against in-process test doubles.
