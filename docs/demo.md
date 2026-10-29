@@ -2,28 +2,33 @@
 
 This document provides a timed, five-minute engineering walkthrough of Brace Platform. It walks through public orchestration, boundary validation, failure handling, cleanup safety, and packaging checks.
 
-> **Notice on Scope and Test Doubles**
+> **Demonstration Architecture Notice**
 >
-> - This walkthrough uses in-process test doubles (adapters, observers, transport, and evaluators).
-> - It does not contact a live Kubernetes cluster or execute backup restoration.
-> - Operational phase execution success indicates that an infrastructure lifecycle phase ran without an unhandled error; it is not necessarily a positive observation outcome.
-> - No production evaluator or recoverability decision algorithm is included in this public repository.
+> This repository presents two distinct demonstration paths:
+> 1. **Local Package Demonstration (`python -m brace.demo`)**: Executes entirely in-process using test doubles. It does not contact a live Kubernetes cluster, create AWS resources, make network requests, or execute backup restoration.
+> 2. **Verified AWS Demonstration Harness (`scripts/live_demo.py`)**: A separate, explicitly invoked lifecycle harness validated on a temporary Amazon EKS cluster in AWS region `ap-south-1`.
+>
+> In both demonstrations, the evaluator is a presentation double returning fixed affirmed standing. *No production recoverability decision was made.* Neither demonstration includes backup restoration, volume snapshots, or the proprietary production evaluator.
 
-## One-Command Demonstration
+For an architectural view of both demonstration surfaces, see the [Architecture Overview](assets/brace-platform-architecture.png).
+
+---
+
+## 1. Local Package Demonstration (In-Process Simulation)
 
 For an immediate local simulation of the public coordination chain from a clean clone without running individual test cases:
 
 ```bash
+git clone https://github.com/ganeshvm-blr/brace-platform.git
+cd brace-platform
+python3 -m venv .venv
+source .venv/bin/activate
+python -m pip install --upgrade pip
+python -m pip install -c constraints.txt -e ".[dev]"
 python -m brace.demo
 ```
 
-This command executes the public coordination chain locally using in-process test doubles:
-- request and identity validation;
-- isolated namespace orchestration and workload application through test doubles;
-- simulated Kubernetes readiness and HTTP responsiveness observation;
-- operational observation projection into immutable evidence records;
-- evaluator protocol boundary handoff (`DemoRecoverabilityEvaluator`);
-- cleanup orchestration through test doubles.
+Output:
 
 ```text
 ====================================================
@@ -53,11 +58,18 @@ No network request was made.
 ====================================================
 ```
 
-The sections below step through each lifecycle phase in detail with corresponding unit test assertions.
+### Local Demonstration Boundaries
+
+- **In-process test doubles**: Replaces namespace and workload adapters, observers, and evaluators with in-memory test doubles.
+- **No live Kubernetes cluster contacted**: No cluster API server is contacted.
+- **No AWS resources created**: Operates completely within the local process.
+- **No network requests**: Makes zero outbound socket or HTTP calls.
+- **No backup restoration**: Exercises workload application and observation only.
+- **Demonstration evaluator test double**: Returns fixed affirmed standing for illustrative protocol handoff only; contains no proprietary reasoning logic, scoring models, thresholds, or decision pipeline.
 
 ---
 
-## Walkthrough Summary
+## 2. Timed Walkthrough Summary
 
 | Time | Topic | Key Files | Executable Verification |
 |---|---|---|---|
@@ -170,31 +182,29 @@ All packaging tests pass, confirming metadata validity, dependency closure, and 
 
 ## Running the Complete Suite
 
-To execute all tests across the public platform:
+To execute all unit, composition, packaging, and live demo harness tests:
 
 ```bash
 python -m pytest tests -v -p no:cacheprovider
 ```
 
-Expected result:
-```text
-63 passed; execution time varies.
-```
+Current verified local result: **75 passed, 1 skipped on Python 3.14.6** (76 collected tests).
 
 ---
 
-## Public Live AWS Demonstration Runner
+## 3. Verified AWS Demonstration Harness
 
-The public repository provides a standalone live-demonstration runner script at `scripts/live_demo.py` designed to execute against a real AWS EKS cluster without private dependencies:
+The repository includes a standalone live-demonstration runner at `scripts/live_demo.py` designed to execute against a real AWS EKS cluster without private dependencies:
 
-- **Terraform Automation**: Provisions a minimal VPC and EKS cluster in `infra/terraform`.
+- **Terraform Automation**: Provisions a temporary VPC (public/private subnets, NAT gateway) and an Amazon EKS cluster in `infra/terraform`.
 - **Public Workload Deployment**: Applies the approved public sample workload from `workloads/demo-app` using a digest-pinned image reference (`@sha256:`).
-- **Zero Workstation Uploads**: Workloads are pre-published to GitHub Container Registry (GHCR) and pulled by EKS nodes directly from public registry mirrors.
-- **Real Operational Observations**: Collects genuine Kubernetes deployment readiness and service HTTP responsiveness observations.
-- **Sanitized Evidence Retention**: Outputs command execution transcripts, timestamps, and stage statuses to `.demo/evidence/<run-id>/summary.json`.
+- **Public Container Registry**: Workload and verifier images are published to GitHub Container Registry (GHCR) and pulled directly by EKS nodes. Amazon ECR is **not** used.
+- **Real Operational Observations**: Collects genuine Kubernetes deployment readiness and in-cluster service HTTP 200 responses.
+- **Sanitized Local Evidence**: Outputs execution transcripts, timestamps, and stage statuses to `.demo/evidence/<run-id>/` on local disk. Evidence is **not** uploaded to Amazon S3.
 - **Explicit Non-Production Statement**: The runner outputs:
   `"No production recoverability decision was made."`
-- **Ownership Cleanup & Teardown**: Removes the run-scoped namespace under explicit ownership metadata and tears down the Terraform stack upon completion.
+- **Ownership Cleanup & Teardown**: Deletes the run-scoped namespace under explicit ownership metadata and destroys the 22 Terraform resources upon completion.
+- **Independent Residue Audit**: Verifies zero surviving run-owned AWS resources.
 
 ### Local Simulation (Dry-Run)
 ```bash
@@ -212,6 +222,7 @@ python scripts/live_demo.py \
 ### Evidence Separation
 - **Sanitized Exportable Evidence**: Retained directly in `.demo/evidence/<run-id>/` (`summary.json`, `summary.md`, and `verifier-result.json`).
 - **Raw Command Diagnostics**: Preserved in `.demo/evidence/<run-id>/diagnostics/` containing per-command subprocess outputs and exit codes.
+- **Zero Cloud Storage**: No evidence or logs are uploaded to Amazon S3.
 
-### Verified Public AWS Run
-The public AWS live lifecycle has been executed and verified end-to-end on AWS EKS (`ap-south-1`). See [docs/public-demo-freeze.md](public-demo-freeze.md) for the verified public demo freeze record and operational observations.
+### Verified Milestone Freeze Record
+The public AWS live lifecycle has been executed and verified end-to-end on AWS EKS (`ap-south-1`) with Run ID `895844a6-afb2-45e1-a2c6-30c1229dc844`. See [docs/public-demo-freeze.md](public-demo-freeze.md) for the complete verified freeze record. No further AWS execution is authorized.

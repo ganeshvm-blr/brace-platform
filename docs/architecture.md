@@ -1,22 +1,47 @@
 # Brace Platform Architecture
 
-## 1. Scope and purpose
+## 1. Scope and Purpose
 
-This document describes the public architecture of Brace Platform: a Kubernetes recoverability-verification orchestration platform with a pluggable reasoning boundary. It covers the public modules under `src/brace/`, the boundary contract under `src/brace/reasoning/`, the packaging arrangement, and the verification strategy.
+This document specifies the technical architecture of Brace Platform across two distinct layers:
+1. **Layer A — Product and Package Architecture**: The installable Python package (`brace`) orchestrating request validation, run-scoped namespace lifecycles, workload deployment, bounded operational observation, immutable evidence projection, and boundary delegation across the `RecoverabilityEvaluator` protocol.
+2. **Layer B — Verified AWS Demonstration Architecture**: The standalone demonstration harness (`scripts/live_demo.py` and `infra/terraform`) orchestrating temporary Amazon Web Services (AWS) infrastructure, Amazon Elastic Kubernetes Service (EKS), in-cluster observation, structured local evidence, and teardown with residue verification.
 
-The platform's responsibility ends where decision making begins. Brace Platform executes and observes an isolated Kubernetes namespace per run, applies an approved workload bundle, projects operational results into immutable observations, and presents those observations to an injected evaluator through a defined protocol. The public platform does not implement backup restoration, volume snapshot restores, or database state recovery. Every public platform component described here is implemented in the current repository. Reaching an authoritative recoverability conclusion requires an injected `RecoverabilityEvaluator`, whose implementation is external by design.
+The platform's operational responsibility ends where decision making begins. Brace Platform executes and observes infrastructure and workloads; it does not decide recoverability. The evaluator implementation is external by design and is not included in this repository. Neither layer implements backup restoration, volume snapshots, database recovery, or integration with tools like Velero, Prometheus, Grafana, or Argo CD.
 
-## Public V1 Architecture at a Glance
+## Architecture at a Glance
+
+![Brace Platform Architecture](assets/brace-platform-architecture.png)
+
+*Architectural overview detailing the verified live AWS demonstration harness (top path) and the local package demonstration (bottom path). Source definition maintained in [brace-platform-architecture-source.md](assets/brace-platform-architecture-source.md).*
+
+```
+Kubernetes execution and observation
+    -> immutable operational observations
+    -> RecoverabilityEvaluator protocol
+    -> RecoverabilityKnowledge
+```
+
+The system enforces a strict one-way dependency boundary:
+- The **platform** creates and removes run-scoped namespaces, applies approved workload bundles, observes readiness and responsiveness, and projects immutable observations. It never decides recoverability.
+- The **evaluator** receives one boundary request per run and returns an immutable `RecoverabilityKnowledge` result. It never operates infrastructure.
+- When no evaluator is injected (`evaluator=None`), the platform executes every operational phase and fails at the boundary with `ReasoningCoreNotProvided`, followed by ownership-scoped cleanup.
+- *No production recoverability decision was made.*
+
+---
+
+## 2. Layer A: Product and Package Architecture
+
+The installable Python package (`src/brace/`) provides modular, protocol-driven orchestration components designed to execute against any conformant Kubernetes cluster:
 
 ```mermaid
 flowchart LR
-    Request["Validated verification request"]
-    Namespace["Run-scoped namespace"]
-    Workload["Approved workload bundle"]
-    Ready["Readiness observation"]
-    Responsive["HTTP responsiveness observation"]
-    Projection["Immutable operational observations"]
-    Boundary["RecoverabilityEvaluator protocol"]
+    Request["1. Validated verification request"]
+    Namespace["2. Run-scoped namespace"]
+    Workload["3. Approved workload bundle"]
+    Ready["4. Readiness observation"]
+    Responsive["5. HTTP responsiveness observation"]
+    Projection["6. Immutable operational observations"]
+    Boundary["7. RecoverabilityEvaluator protocol"]
     Evaluator["External evaluator"]
     Cleanup["Ownership-scoped cleanup attempt"]
 
@@ -31,57 +56,36 @@ flowchart LR
     Namespace -. applicable success or failure path .-> Cleanup
 ```
 
-The diagram describes the public package boundary. Public tests use in-process test doubles. The diagram does not represent backup restoration or live-cluster proof. Cleanup is attempted and failures are preserved; resource absence is not proven by the public tests.
-
-For a presentation-oriented view of the same public boundary, see the [public architecture graphic](assets/brace-platform-v1-public-architecture.png).
-
-## 2. Public system boundary
-
-The system is split along one intentional boundary.
-
-```
-Kubernetes execution and observation
-    -> immutable operational observations
-    -> RecoverabilityEvaluator protocol
-    -> RecoverabilityKnowledge
-```
-
-- The **platform** (public) creates and removes run-scoped namespaces, applies approved workload bundles, observes readiness and responsiveness, and projects observations. It never decides recoverability.
-- The **evaluator** (external) receives one boundary request per run and returns an immutable `RecoverabilityKnowledge` result. It never operates infrastructure.
-- The platform supplies an evaluator by dependency injection. When no evaluator is provided, the platform completes every operational phase and fails at the boundary with `ReasoningCoreNotProvided`.
-
-The platform holds no knowledge of how an evaluator derives its result; that derivation is not part of this repository and is not documented here.
-
-## 3. Component responsibilities
+### Component Responsibilities
 
 | Component | Module | Responsibility |
 |---|---|---|
-| Request validation | `_runtime_owned_request.py` | Parse and strictly validate the approved run request: identities, ownership, bundle shape, port alignment, replica count, and image digest pinning. |
-| Namespace adapter | `_kubernetes_namespace.py` | Create, inspect, and ownership-scoped deletion of the run namespace. |
-| Workload adapter | `_kubernetes_workload.py` | Apply the approved deployment/service/config map and inspect for exact-match confirmation. |
-| Readiness observer | `_kubernetes_readiness.py` | Observe Kubernetes readiness within a bounded convergence deadline. |
-| Responsiveness observer | `_kubernetes_responsiveness.py` | Observe in-cluster service responsiveness with bounded retry and timeout policy. |
-| Convergence engine | `_runtime_observation_convergence.py` | Deadline-bounded sampling, retryable transient classification, and timeout handling shared by the observers. |
-| Transport | `_http_client_transport.py` | Minimal stdlib HTTP transport with strict error classification for responsiveness observation. |
-| Projection | `_operational_projection.py` | Deterministically project operational check results into immutable evidence records. |
-| Coordinator | `_runtime_owned_verification.py` | Sequence the exact public phases, record each phase result, perform the boundary handoff, and enforce cleanup semantics. |
-| Composition | `_runtime_owned_composition.py` | Build adapters, observers, transport, clocks, and timeouts, and wire the optional evaluator into the coordinator. |
-| Boundary | `reasoning/boundary.py` | Define the `RecoverabilityEvaluator` protocol, the structural `EvaluationRequest` contract, `evaluate_recoverability`, and the `ReasoningCoreNotProvided` exception. `RecoverabilityKnowledge` is defined in `_recoverability_knowledge.py` and used by the boundary contract. |
-| Evidence model | `_evidence_kind.py`, `_recovery_observation.py`, `_recovery_event.py`, `_recoverability_knowledge.py` | Immutable value types that flow from the platform to the boundary. |
+| **Request validation** | `_runtime_owned_request.py` | Parse and strictly validate the approved run request: identities, ownership, bundle shape, port alignment, replica count, and image digest pinning before any I/O. |
+| **Namespace adapter** | `_kubernetes_namespace.py` | Create, inspect, and ownership-scoped deletion of the run-scoped namespace using `kubernetes.client.CoreV1Api`. |
+| **Workload adapter** | `_kubernetes_workload.py` | Apply the approved Deployment, Service, and ConfigMap manifests; reinspect applied resources for exact-match confirmation. |
+| **Readiness observer** | `_kubernetes_readiness.py` | Sample Kubernetes deployment ready condition within a bounded convergence deadline. |
+| **Responsiveness observer** | `_kubernetes_responsiveness.py` | Sample in-cluster service endpoints over the transport with bounded retry and timeout policy. |
+| **Convergence engine** | `_runtime_observation_convergence.py` | Shared deadline-bounded sampling, retryable transient classification, and timeout handling. |
+| **Transport** | `_http_client_transport.py` | Minimal stdlib HTTP transport with strict error classification for responsiveness observation. |
+| **Projection** | `_operational_projection.py` | Deterministically project operational check results into immutable evidence records. |
+| **Coordinator** | `_runtime_owned_verification.py` | Sequence the exact public phases, record phase execution results, perform the boundary handoff, and enforce cleanup semantics. |
+| **Composition** | `_runtime_owned_composition.py` | Factory wiring adapters, observers, transport, clocks, and timeouts into a cohesive coordinator. |
+| **Boundary** | `reasoning/boundary.py` | Defines the `RecoverabilityEvaluator` protocol, the structural `EvaluationRequest` contract, and the `ReasoningCoreNotProvided` exception. |
+| **Evidence models** | `_evidence_kind.py`, `_recovery_observation.py`, `_recoverability_knowledge.py` | Immutable value types flowing from the platform across the decision boundary. |
 
-## 4. Runtime sequence
+### Seven-Phase Runtime Lifecycle
 
-A run executes the exact public phases in order:
+A verification run executes the following exact operational phases in order:
 
-1. `namespace_create` — the namespace adapter creates the run-scoped namespace under explicit ownership.
-2. `workload_apply` — the workload adapter applies the approved bundle (deployment, service, config map).
-3. `readiness_observe` — the readiness observer samples Kubernetes readiness until observed or until its deadline.
-4. `responsiveness_observe` — the responsiveness observer samples the service over the transport until observed or until its deadline.
-5. `observation_project` — the projection function converts each operational check result into an immutable evidence record.
-6. `reasoning_boundary` — the coordinator builds the boundary request and calls the evaluator through the protocol.
-7. `namespace_cleanup` — the namespace adapter removes the run namespace under ownership.
+1. `namespace_create` — the namespace adapter creates the run-scoped namespace with explicit ownership metadata.
+2. `workload_apply` — the workload adapter applies the approved bundle (Deployment, Service, ConfigMap).
+3. `readiness_observe` — the readiness observer samples Kubernetes readiness until converged or timed out.
+4. `responsiveness_observe` — the responsiveness observer samples the service endpoint until successful or timed out.
+5. `observation_project` — the projection function converts operational results into immutable evidence records.
+6. `reasoning_boundary` — the coordinator constructs the boundary request and delegates across the protocol.
+7. `namespace_cleanup` — the namespace adapter removes the run-scoped namespace under ownership labels.
 
-Every phase is recorded as an `ExecutionPhaseResult` with its phase and success flag. A phase recording `succeeded=True` indicates that the operational lifecycle step executed without an unhandled error; it is distinct from whether the observed check condition evaluated to affirmative or negative. These are operational lifecycle phases of the platform; they are not stages of an evaluator.
+Every phase records an `ExecutionPhaseResult` with a `succeeded` flag. An operational phase recording `succeeded=True` indicates that the lifecycle step ran without infrastructure failure; it is distinct from whether the observed check condition evaluated to an affirmative or negative result.
 
 ```mermaid
 sequenceDiagram
@@ -121,97 +125,131 @@ sequenceDiagram
     end
 ```
 
-## 5. Identity and ownership invariants
+### Identity and Ownership Invariants
 
-The following exact invariants are enforced before operational I/O, collectively by the request parser, the validated value types, and coordinator entry validation:
+The platform enforces strict structural continuity before any operational I/O:
+- `recovery_event.workload_id == protected_workload.workload_id`
+- `namespace.run_id == run_id`
+- `ownership.run_id == run_id`
+- `ownership.workload_id == protected_workload.workload_id`
+- `ownership.bundle == workload_bundle.identity`
+- `service.target_port == deployment.container.container_port`
+- `replicas == 1`
+- Container images require `@sha256:` followed by exactly 64 hexadecimal characters.
 
-- `recovery_event.workload_id` equals `protected_workload.workload_id`
-- `namespace.run_id` equals `run_id`
-- `ownership.run_id` equals `run_id`
-- `ownership.workload_id` equals `protected_workload.workload_id`
-- `ownership.bundle` equals `workload_bundle.identity`
-- `service.target_port` equals `deployment.container.container_port`
-- `replicas` equals `1`
-- images must use `@sha256:` followed by exactly 64 hexadecimal characters (the retained validator accepts lowercase `a`–`f`)
+Immediately upon receiving a response from the evaluator, the coordinator additionally validates:
+- The return value is an instance of `RecoverabilityKnowledge`.
+- `knowledge.subject.subject_id.value == protected_workload.workload_id`.
 
-The boundary request additionally enforces, for every projected observation:
+If these invariants are violated, the coordinator rejects the return object, triggers ownership-scoped cleanup, and raises `TypeError` or `ValueError`.
 
-- projected observation event IDs equal `recovery_event.event_id`
-- projected observation workload IDs equal `protected_workload.workload_id`
+### Deterministic Observation Projection
 
-Together these invariants establish **operational identity continuity**: every artifact in a run — namespace, ownership, event, observations, and workload — is bound to the same run, event, and workload references from request acceptance through boundary handoff. These invariants describe the platform's identity and lifecycle guarantees; they are not a recoverability decision procedure.
+The projection function `project_operational_check(run_id, protected_workload, recovery_event, result)` converts operational check results into immutable frozen dataclass instances with:
+- An evidence kind derived deterministically from the check kind:
+  - `KUBERNETES_READY` -> `EvidenceKind.KUBERNETES_READINESS`
+  - `APPLICATION_RESPONSIVE` -> `EvidenceKind.APPLICATION_RESPONSIVENESS`
+- Deterministic record identities derived from `run_id`, `recovery_event_id`, `workload_id`, and `evidence_kind`.
+- Verbatim propagation of event and workload references.
 
-## 6. Observation and deterministic projection
+### Failure and Cleanup Model
 
-The projection function `project_operational_check(run_id, protected_workload, recovery_event, result)` maps each operational check result to an evidence record with:
+1. **Phase failure**: An unhandled exception during any operational phase records the failure and raises `VerificationCoordinationFailed` with `failed_phase`, `primary_failure`, `cleanup_failure`, and the phase record.
+2. **Post-failure cleanup**: Ownership-scoped namespace deletion is attempted after any phase failure. If cleanup also fails, the cleanup exception is stored separately on `cleanup_failure`; the primary failure is never masked.
+3. **Post-success cleanup failure**: If evaluation succeeds but subsequent namespace deletion fails, `VerificationCleanupFailed` is raised, preserving both the cleanup exception and the generated `RecoverabilityKnowledge`.
+4. **Missing evaluator**: When no evaluator is injected, the platform completes phases 1–5, raises `ReasoningCoreNotProvided` at phase 6 (`reasoning_boundary`), and attempts namespace deletion.
 
-- an evidence kind derived deterministically from the check kind (`KUBERNETES_READY` maps to `EvidenceKind.KUBERNETES_READINESS`; `APPLICATION_RESPONSIVE` maps to `EvidenceKind.APPLICATION_RESPONSIVENESS`);
-- a deterministic identity derived from exactly `run_id`, `recovery_event_id`, `workload_id`, and `evidence_kind`;
-- the event reference and workload reference carried verbatim.
+---
 
-`EvidenceKind` is an exact two-member enumeration: `KUBERNETES_READINESS` and `APPLICATION_RESPONSIVENESS`. Observations are frozen dataclasses; once projected they cannot be mutated. The coordinator returns the same observation objects it hands across the boundary, so the caller can verify that what the evaluator received is exactly what the platform produced.
+## 3. Layer B: Verified AWS Demonstration Architecture
 
-## 7. Evaluator dependency inversion
-
-`reasoning/boundary.py` defines the contract between the public platform and the decision component:
-
-- `RecoverabilityEvaluator` — a runtime-checkable protocol with a single `evaluate(request)` operation returning `RecoverabilityKnowledge`;
-- `EvaluationRequest` — the structural envelope carrying run identity, the protected workload, the recovery event, and the projected observations;
-- `evaluate_recoverability(request, evaluator)` — the single crossing point: with an evaluator it delegates; without one it raises `ReasoningCoreNotProvided`;
-- `RecoverabilityKnowledge` — the immutable result type returned by an evaluator.
-
-The coordinator receives the evaluator by dependency injection through the composition function and holds it only as the protocol. The platform therefore has no compile-time or runtime knowledge of evaluator internals, and an evaluator implementation cannot be surprised by platform internals either: it receives exactly the boundary request described here and performs no infrastructure operations.
+The repository contains a standalone, explicitly invoked demonstration harness designed to validate the orchestration model against live AWS infrastructure without proprietary dependencies:
 
 ```mermaid
-graph LR
-    Platform["Public platform"] --> Protocol["RecoverabilityEvaluator protocol"]
-    Protocol --> External["External evaluator implementation"]
-    External --> Knowledge["RecoverabilityKnowledge"]
+flowchart LR
+    Runner["Python Runner<br/>(scripts/live_demo.py)"]
+    TF["Terraform Stack<br/>(infra/terraform)"]
+    AWS["Temporary AWS VPC<br/>& Amazon EKS"]
+    GHCR["GitHub Container Reg.<br/>(ghcr.io)"]
+    K8s["Run-Scoped Namespace<br/>(Deployment, Svc, ConfigMap)"]
+    Verifier["In-Cluster Verifier<br/>(Job & HTTP 200 Probe)"]
+    Evidence["Local Evidence Files<br/>(.demo/evidence/<run-id>/)"]
+    Destroy["Terraform Destroy<br/>& Residue Audit"]
+
+    Runner --> TF
+    TF --> AWS
+    Runner --> K8s
+    GHCR -. pull by digest .-> K8s
+    K8s --> Verifier
+    Verifier --> Evidence
+    Runner --> Destroy
 ```
 
-## 8. Failure and cleanup model
+### AWS Demonstration Components
 
-Failure behavior is explicit and test-verified:
+1. **Python Lifecycle Runner (`scripts/live_demo.py`)**:
+   A dedicated orchestration script managing prerequisites, node eligibility checks, Terraform convergence, kubeconfig generation, manifest rendering, in-cluster Job dispatch, result validation, teardown, and residue verification.
+2. **Terraform Stack (`infra/terraform`)**:
+   Provisions temporary, run-isolated infrastructure:
+   - AWS VPC with CIDR `10.0.0.0/16`.
+   - 2 Public Subnets (`10.0.101.0/24`, `10.0.102.0/24`) and 2 Private Subnets (`10.0.1.0/24`, `10.0.2.0/24`).
+   - Single NAT Gateway for outbound container pulling.
+   - Amazon EKS Control Plane (Kubernetes 1.36).
+   - Managed Node Group configured with 1x `t3.small` instance (`FreeTierEligible=true`, `x86_64`).
+   - Explicit 2700-second apply timeout.
+3. **Approved Workload Bundle**:
+   Located in `workloads/demo-app/`, containing Deployment, Service, and ConfigMap definitions applied into a run-scoped namespace (`run-<id>`) with explicit ownership labels (`brace.platform/run-id`, `brace.platform/ownership-owner`).
+4. **GitHub Container Registry (GHCR)**:
+   Container images are pulled directly from GHCR by the EKS nodes; Amazon ECR is **not** used:
+   - Workload: `ghcr.io/ganeshvm-blr/brace-platform-demo-workload@sha256:588c07b235103a9f73d5f069418c1b1e2966c57245fd4be4bab8658053a5650a`
+   - Verifier: `ghcr.io/ganeshvm-blr/brace-platform-verifier@sha256:d06d70a5b892705ad537f05eb246d8171cc236d52310912b800789bc84509fc8`
+5. **Real In-Cluster Observation**:
+   - Readiness: The runner polls the Kubernetes API until the deployment achieves `availableReplicas == 1`.
+   - Responsiveness: An in-cluster verifier Job launches inside the run namespace, probes the Service's cluster IP, and observes HTTP status `200 OK`.
+6. **Local Evidence Retention**:
+   All execution transcripts, timestamps, and structured results are stored exclusively on local disk at `.demo/evidence/<run-id>/` (`summary.json`, `summary.md`, and `verifier-result.json`). Evidence is **not** uploaded to Amazon S3.
+7. **Clean Teardown and Residue Audit**:
+   - The runner removes the run-scoped namespace, RBAC roles, and verifier Job.
+   - A pre-destroy node group guard ensures node groups are cleanly detached before cluster deletion.
+   - `terraform destroy` cleanly removes all 22 cloud resources.
+   - An independent AWS CLI audit checks for surviving VPCs, subnets, NAT gateways, route tables, security groups, and EKS clusters, confirming zero active run-owned resources.
 
-- **Phase failure.** Any operational or boundary phase failure is recorded with the failed phase and the original exception, and a `VerificationCoordinationFailed` is raised carrying `failed_phase`, `primary_failure`, `cleanup_failure`, and the full phase record.
-- **Cleanup after failure.** After a phase failure, ownership-scoped namespace deletion is attempted; if that deletion also fails, the cleanup exception is retained separately on `cleanup_failure` (the original failure is never overwritten).
-- **Cleanup after success.** After a successful boundary handoff, namespace deletion is the final phase. If it fails, `VerificationCleanupFailed` is raised and preserves the produced knowledge, observations, and phase record; the cleanup exception is available as `cleanup_failure` and as the exception cause.
-- **Boundary failure mode.** With no evaluator, the platform completes all operational phases and the boundary crossing raises `ReasoningCoreNotProvided`, surfaced inside `VerificationCoordinationFailed` at the `reasoning_boundary` phase, followed by cleanup.
+### Verified Milestone Facts
 
-## 9. Package and dependency boundaries
+The live demonstration was validated end-to-end on AWS on commit `e8329b6` with Run ID `895844a6-afb2-45e1-a2c6-30c1229dc844` in region `ap-south-1`. See [docs/public-demo-freeze.md](public-demo-freeze.md) for the verified freeze record.
 
-The package is `brace-platform` 0.1.0, src-layout via `pyproject.toml`:
+---
 
-- `requires-python = ">=3.10"` (derived from the retained source's runtime-evaluated type unions and dataclass `slots=True`);
-- runtime dependencies: `kubernetes` and `urllib3` — exactly the third-party packages directly imported by retained production modules (verified by `tests/test_package_installation.py`, which asserts declared dependencies and retained imports match in both directions);
-- development dependencies: `pytest` and `build`;
-- `MANIFEST.in` prunes `tests/` from the source distribution so neither distribution carries test files;
-- the wheel ships only the `brace` package and its metadata; the sdist carries the package sources and packaging files.
+## 4. Evaluator Boundary Inversion
 
-The public package is dependency-closed: importing any module of the installed package resolves only standard library, `brace` itself, and the declared runtime dependencies.
+`src/brace/reasoning/boundary.py` establishes the contract between platform execution and external evaluation:
+- `RecoverabilityEvaluator`: A runtime-checkable protocol with a single method: `evaluate(request: EvaluationRequest) -> RecoverabilityKnowledge`.
+- `EvaluationRequest`: Structural envelope containing run ID, protected workload, recovery event, and projected immutable observations.
+- `evaluate_recoverability`: The boundary dispatch function. If an evaluator is provided, it delegates; if omitted, it raises `ReasoningCoreNotProvided`.
+- `RecoverabilityKnowledge`: An immutable value type carrying the evaluator's findings and subject reference.
 
-## 10. Verification strategy
+The platform holds no reference to evaluator heuristics, rules, scoring algorithms, or decision pipelines. In both the local package demo (`python -m brace.demo`) and the live AWS demo, an illustrative demonstration test double returning fixed affirmed standing is supplied. *No production recoverability decision was made.*
 
-The test suite (`tests/`) is structured in three layers:
+---
 
-- **Authority-chain tests** (`test_runtime_owned_verification.py`) — drive the real coordinator with in-process fakes that replay production-built payloads: exact phase order, single cleanup, boundary request identity, projected observations, every per-phase failure path with cleanup, both cleanup-failure modes, and every identity invariant rejection before I/O.
-- **Composition tests** (`test_runtime_owned_composition.py`) — cover the public entry point: exact evaluator threading, the full success path with an injected evaluator, the no-evaluator path through the real boundary with cleanup, and evaluator forwarding.
-- **Packaging guards** (`test_package_installation.py`) — verify pyproject metadata, dependency/import closure, absence of private references in packaging files, and the src discovery layout.
+## 5. Security and Supply Chain Posture
 
-Tests never contact a Kubernetes cluster: adapters and observers are fakes, and the composition patching covers config loading and client construction. These in-process fake-based tests verify coordinator authority and failure paths, but do not constitute live-cluster operational proof. The suite currently passes **42 tests**.
+- **Cryptographic Digest Pinning**: All container image references must be pinned with `@sha256:` followed by 64 hexadecimal characters. Requests with tag-based images (`:latest`) are rejected before any I/O.
+- **Ownership-Scoped Cleanup**: Resource deletion queries filter strictly by ownership labels to prevent accidental deletion of unrelated infrastructure.
+- **Zero Credentials**: No credentials, access keys, tokens, or environment-specific paths are tracked in the repository. Packaging audits scan all distributions for credential patterns.
+- **Dependency Closure**: The package declares only `kubernetes` and `urllib3` as runtime dependencies, matching retained imports exactly.
 
-## 11. Security and disclosure posture
+---
 
-- **Digest pinning.** Container images are required to be pinned with `@sha256:` plus exactly 64 hexadecimal characters; the request is rejected otherwise. No registry, account, or environment identifiers appear in this repository.
-- **Ownership-scoped deletion.** Namespace removal is bound to run identity and ownership; cleanup is attempted after failures and its own failure is reported explicitly.
-- **No credentials.** No credentials, keys, tokens, or environment-specific paths are present in source, tests, packaging, or distributions; the packaging guards scan for them.
-- **No cluster contact in tests.** The public test suite runs entirely in-process against fakes; nothing in the repository connects to a cluster during installation, import, or testing.
-- **Boundary opacity.** The public boundary deliberately does not describe how an evaluator reaches a conclusion. The derivation procedure, and any treatment of the evidence it applies, is a property of the external evaluator and is intentionally outside this artifact.
+## 6. What Is Intentionally External
 
-## 12. What is intentionally external
-
-- The `RecoverabilityEvaluator` implementation — the decision component that transforms a boundary request into `RecoverabilityKnowledge` — is not distributed with this repository.
-- Genuine backup restoration, snapshot replay, storage volume recovery, and live infrastructure proof are external to this public platform implementation.
-- Reaching an authoritative recoverability conclusion requires an injected evaluator; without one, the platform operates fully through the operational phases and stops at the boundary with `ReasoningCoreNotProvided`.
-- Kubernetes credentials, cluster access, and runtime configuration are the caller's responsibility.
-- Any reasoning capability beyond the protocol contract is external by design; this repository documents only the platform, the boundary, and their verified behavior.
+The following capabilities are explicitly outside the scope of Brace Platform:
+- **No Backup Restoration**: The platform applies and observes workloads; it does not implement backup restoration, volume snapshots, storage recovery, or database replays.
+- **No Velero / CSI Integration**: The platform does not interface with Velero, CSI snapshot controllers, or cloud volume APIs.
+- **No Production Evaluator**: The proprietary decision engine that evaluates operational evidence against recovery standards is external.
+- **No Monitoring Stack**: Prometheus, Grafana, OpenTelemetry, and alert managers are not included.
+- **No GitOps Engine**: Argo CD, Flux, and deployment pipelines are not included.
+- **No Amazon ECR**: The public demo uses GitHub Container Registry (GHCR).
+- **No Amazon S3 Evidence Storage**: Evidence is written exclusively to local disk.
+- **No Live Cluster Proof from Unit Tests**: The 75 passing unit/composition tests execute against in-process test doubles.
+- **No Continuous Assurance**: Continuous or recurring verification across fleets represents an uncommitted future roadmap horizon.

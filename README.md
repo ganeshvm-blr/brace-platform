@@ -4,33 +4,41 @@
 
 Brace Platform orchestrates isolated Kubernetes verification runs to observe application workloads and deliver structured evidence across a pluggable decision boundary.
 
-In disaster recovery and platform operations, teams often confirm that Kubernetes resources were applied successfully without verifying that the application became ready and responsive. Declaring an environment recoverable based solely on manifest creation leaves operational gaps when workloads crash, fail health probes, or experience connectivity failures.
+## Why This Exists
 
-This public package addresses that problem by orchestrating a bounded verification run: it creates a run-scoped namespace, applies an approved workload bundle (Deployment, Service, and ConfigMap), observes Kubernetes readiness within bounded deadlines, probes HTTP responsiveness, projects results into immutable operational observations, delegates evaluation to an external `RecoverabilityEvaluator`, and attempts ownership-scoped cleanup.
+In disaster recovery and platform operations, teams frequently confirm that Kubernetes manifests applied successfully without verifying that the workload converged to operational readiness or responded to health probes. Declaring an environment recoverable based solely on resource creation leaves operational gaps when pods crash, dependencies fail, or in-cluster networking faults prevent traffic flow.
 
-This repository focuses on workload orchestration, observation, and boundary contracts. It does not restore backups, manage volume snapshots, or recover storage systems, and it does not contain the proprietary evaluator decision implementation.
+Brace Platform addresses this problem by decoupling operational infrastructure orchestration from the evaluation logic that decides recoverability:
+1. It validates requests with strict cross-field structural invariants before any I/O.
+2. It orchestrates a run-scoped, ownership-labeled namespace.
+3. It applies an approved workload bundle (Deployment, Service, and ConfigMap) with digest-pinned images.
+4. It observes Kubernetes readiness and in-cluster HTTP responsiveness within bounded deadlines.
+5. It projects operational results into immutable evidence records with deterministic identities.
+6. It delivers structured evidence across a one-way boundary protocol to an external evaluator.
+7. It executes ownership-scoped cleanup while preserving primary and cleanup failure states.
 
-## Current Public V1
+## Architecture Overview
 
-The current public baseline demonstrates:
+![Brace Platform Architecture and Demonstration Paths](docs/assets/brace-platform-architecture.png)
 
-- validated, run-scoped verification requests;
-- isolated namespace orchestration;
-- approved Kubernetes workload application;
-- bounded readiness and HTTP responsiveness observations;
-- immutable operational observation projection;
-- delegation through an external RecoverabilityEvaluator protocol;
-- ownership-scoped cleanup attempts;
-- explicit primary and cleanup failure preservation;
-- tested package and distribution boundaries.
+*Architecture overview showing the verified AWS demonstration harness (top path) and the local package demonstration (bottom path). Both paths preserve the external evaluator boundary: No production recoverability decision was made.*
 
-This public V1 is an orchestration and observation platform. It does not restore backups, provision AWS infrastructure, include the production evaluator, or prove live-cluster recoverability. See [docs/public-demo-freeze.md](docs/public-demo-freeze.md) for the verified public demonstration lifecycle record on AWS EKS.
+## Two Demonstration Paths
 
-See [docs/public-roadmap.md](docs/public-roadmap.md) for high-level capability directions that are intentionally separated from implementation commitments.
+The repository exposes two related but architecturally separate demonstration surfaces:
 
-## Quick Demo
+1. **Installable Public Package (`python -m brace.demo`)**:
+   The core Python package orchestrating request validation, run-scoped namespace lifecycle, workload application, bounded readiness and HTTP observation, immutable projection, boundary handoff, and ownership-scoped cleanup. The local demonstration runs entirely in-process using test doubles—contacting no live cluster, creating no AWS resources, and making no network requests.
 
-Run the local simulation of the public coordination chain from a clean clone:
+2. **Verified AWS Demonstration Harness (`scripts/live_demo.py` & `infra/terraform`)**:
+   A separately invoked, standalone demonstration harness that automates temporary AWS infrastructure (VPC, public/private subnets, NAT gateway, Amazon EKS, and managed node group), pulls digest-pinned images from GitHub Container Registry (GHCR), observes real Kubernetes readiness and in-cluster HTTP 200 responses, stores evidence locally on disk, deletes Kubernetes resources, destroys Terraform infrastructure, and confirms zero cloud residue through an independent audit.
+
+> **Architecture Boundary Notice**
+> The installable public package does not provision AWS infrastructure. The repository also contains a separate, explicitly invoked Terraform demonstration harness that has been validated on a temporary Amazon EKS environment. Neither path implements backup restoration, volume snapshots, or storage recovery, and neither includes the proprietary production recoverability evaluator.
+
+## Local Package Quick Start (5 Minutes)
+
+Run the local demonstration of the public coordination chain from a clean clone:
 
 ```bash
 git clone https://github.com/ganeshvm-blr/brace-platform.git
@@ -72,45 +80,37 @@ No network request was made.
 ====================================================
 ```
 
-Important boundaries:
-- Uses in-process test doubles for namespace and workload adapters, observers, and evaluators.
-- No live Kubernetes cluster is contacted.
-- No backup restoration is performed.
-- No AWS resources are created.
-- No network request was made.
-- The demonstration evaluator is a presentation test double returning fixed affirmed standing; it contains no proprietary reasoning logic, rules, scoring, evidence interpretation, thresholds, or decision pipeline.
+### Local Demonstration Boundaries
 
-See [docs/demo.md](docs/demo.md) for the detailed five-minute engineering walkthrough.
+- **In-process test doubles**: Uses test doubles for namespace and workload adapters, observers, and evaluators.
+- **No live cluster contacted**: No Kubernetes cluster or API server is accessed.
+- **No AWS resources created**: Runs entirely within the local Python runtime.
+- **No network requests made**: Network sockets and cloud endpoints are not touched.
+- **Demonstration evaluator test double**: Returns fixed affirmed standing for illustrative protocol handoff only; contains no proprietary reasoning logic, scoring models, thresholds, or decision pipeline.
 
-## Public Architecture
+See [docs/demo.md](docs/demo.md) for the detailed step-by-step engineering walkthrough.
 
-![Brace Platform v1 public architecture](docs/assets/brace-platform-v1-public-architecture.png)
+## Verified AWS Demonstration Summary
 
-The diagram is limited to capabilities present in the public package. See [Architecture](docs/architecture.md) for component-level detail and the [Verification matrix](docs/verification-matrix.md) for the evidence and limitations behind each claim.
+The repository includes a standalone demonstration harness designed for live-cluster verification without private dependencies:
 
-*Public package boundary. The production evaluator and backup restoration mechanisms are not included.*
+| Dimension | Verified AWS Demonstration Specification |
+|---|---|
+| **Lifecycle Runner** | `scripts/live_demo.py` |
+| **Infrastructure Stack** | `infra/terraform` (Terraform AWS VPC & EKS modules) |
+| **Target Cloud** | Amazon Web Services (AWS EKS in `ap-south-1`) |
+| **Compute Configuration** | Managed node group with 1x `t3.small` instance |
+| **Container Registry** | GitHub Container Registry (`ghcr.io`), not Amazon ECR |
+| **Image Pinning** | Digest-pinned: `@sha256:588c07b235...` (workload), `@sha256:d06d70a5b8...` (verifier) |
+| **Real Observations** | Kubernetes deployment readiness condition `True`; In-cluster HTTP `200 OK` |
+| **Evidence Storage** | Retained locally on disk in `.demo/evidence/<run-id>/` (NOT in Amazon S3) |
+| **Teardown & Residue** | 22 Terraform resources cleanly destroyed; independent audit confirmed 0 surviving run-owned resources |
+| **Freeze Milestone** | Validated on commit `e8329b6` with Run ID `895844a6-afb2-45e1-a2c6-30c1229dc844` |
+| **Mandatory Boundary** | *No production recoverability decision was made.* |
 
-## What the public repository demonstrates
+See [docs/public-demo-freeze.md](docs/public-demo-freeze.md) for the complete freeze record and [docs/aws-case-study.md](docs/aws-case-study.md) for the sanitized deployment case study.
 
-- **Workload application and observation, not backup restoration** — the platform applies and observes an approved workload bundle (Deployment, Service, ConfigMap); it does not implement backup restoration, volume snapshots, or storage recovery.
-- **Run-scoped namespace identity and ownership** — every run derives a deterministic namespace identity from its run id and carries explicit ownership metadata.
-- **Isolated namespace lifecycle** — namespaces are created for a run and removed by ownership-scoped cleanup.
-- **Approved workload-bundle validation** — the request parser accepts only an approved bundle shape with strict cross-field checks.
-- **Digest-pinned container images** — images must be pinned with `@sha256:` followed by exactly 64 hexadecimal characters.
-- **Workload application and inspection** — deployments, services, and config maps are applied and reinspected for exact-match confirmation.
-- **Readiness observation** — Kubernetes readiness is observed against a bounded convergence deadline.
-- **Application-responsiveness observation** — in-cluster service responsiveness is observed with bounded retry and timeout policy.
-- **Phase execution success vs observation outcome** — operational phase success records that a lifecycle phase completed without infrastructure crash; it is distinct from whether an observation check observed an affirmative or negative condition.
-- **Convergence, retry, timeout, and transport policy** — a shared convergence engine implements deadline-bounded sampling, retryable transient classification, and timeout handling.
-- **Deterministic observation identity** — every projected observation is identified deterministically from run, event, workload, and evidence-kind references.
-- **Immutable evidence records** — observations are frozen dataclasses; `EvidenceKind` is an exact two-member enumeration.
-- **Opaque evaluator dependency injection** — the coordinator depends only on the `RecoverabilityEvaluator` protocol; no decision logic lives in the platform.
-- **Phase-aware failure handling** — every operational phase failure is recorded with its phase and original exception.
-- **Cleanup after operational or boundary failures** — ownership-scoped cleanup is attempted after applicable failures.
-- **Explicit cleanup failure after successful evaluation** — a successful evaluation followed by a cleanup failure raises `VerificationCleanupFailed` while preserving the produced result.
-- **In-process authority-chain tests** — the test suite exercises the full coordination chain through in-process fakes; these unit/integration tests do not constitute live-cluster proof.
-
-## Architecture boundary
+## Public Architecture Boundary
 
 ```
 Kubernetes execution and observation
@@ -119,123 +119,85 @@ Kubernetes execution and observation
     -> RecoverabilityKnowledge
 ```
 
-The direction of dependence is one-way:
+The system enforces a strict one-way dependency boundary:
+- **Platform (Public)**: Coordinates namespace lifecycle, applies workloads, samples readiness and responsiveness, projects immutable evidence records, and manages cleanup. It never decides recoverability.
+- **Evaluator (External)**: An injected component implementing the `RecoverabilityEvaluator` protocol that accepts an `EvaluationRequest` and returns `RecoverabilityKnowledge`. It never operates infrastructure.
+- **Missing Evaluator Behavior**: Running with `evaluator=None` completes all operational phases and surfaces `ReasoningCoreNotProvided` at the `reasoning_boundary` phase, followed by ownership-scoped cleanup.
+- **No Embedded Decision Logic**: The internal decision procedure of an evaluator is external to this repository and is not part of the public contract.
 
-- the platform executes and observes infrastructure;
-- the evaluator decides recoverability;
-- the evaluator implementation is not included in this repository;
-- an `evaluator=None` run reaches `ReasoningCoreNotProvided` through the real boundary at the `reasoning_boundary` phase;
-- no fallback or demonstration reasoning algorithm is supplied.
+## Core Engineering Properties
 
-The internal decision procedure of an evaluator — how a conclusion is derived from the observations it receives — is external to this repository and is not part of the public contract.
+- **Deterministic Identity**: Namespaces and observation records derive identities deterministically from run, event, workload, and evidence-kind references.
+- **Immutable Evidence Models**: Observations and knowledge envelopes are frozen dataclasses; `EvidenceKind` is an exact two-member enumeration (`KUBERNETES_READINESS`, `APPLICATION_RESPONSIVENESS`).
+- **Strict Cross-Field Validation**: Rejects requests before any I/O if run, event, workload, ownership, bundle, port, replica, or digest references do not match.
+- **Cryptographic Digest Pinning**: Workload container images strictly require `@sha256:` followed by exactly 64 hexadecimal characters.
+- **Dependency Inversion**: The coordinator depends exclusively on abstract adapter protocols and the external `RecoverabilityEvaluator` protocol.
+- **Phase Execution Success vs Observation Outcome**: Operational phase success records that a lifecycle phase completed without infrastructure crash; it is distinct from whether an observation evaluated to an affirmative or negative result.
+- **Robust Failure & Cleanup Semantics**: Every phase failure triggers cleanup; primary errors are never masked by cleanup failures; post-evaluation cleanup failures raise `VerificationCleanupFailed` while preserving the generated knowledge.
+- **Dependency-Closed Package**: Declared runtime dependencies (`kubernetes`, `urllib3`) match retained production imports in both directions.
 
-## Runtime lifecycle
+## What Is Intentionally Excluded
 
-A verification run proceeds through the exact public operational phases:
+- **No Backup Restoration**: The platform applies and observes an approved workload bundle; it does not restore backups, replay snapshots, integrate with Velero, or recover storage systems.
+- **No Production Recoverability Decision Algorithm**: The proprietary evaluator, scoring heuristics, and recoverability decision engines are intentionally external.
+- **No Cloud Infrastructure in Package**: The installable package (`brace`) contains no AWS provisioning automation; cloud automation is restricted to the standalone demonstration harness (`scripts/live_demo.py` + `infra/terraform`).
+- **No Live Cluster Contact in Package Tests**: The package unit and composition test suite runs entirely in-process against test doubles.
+- **No Continuous Recoverability Verification**: The platform executes single bounded verification runs; continuous fleet assurance is an uncommitted future capability horizon.
 
-| Phase | Value | Meaning |
-|---|---|---|
-| `NAMESPACE_CREATE` | `namespace_create` | create the run-scoped namespace with ownership |
-| `WORKLOAD_APPLY` | `workload_apply` | apply the approved workload bundle |
-| `READINESS_OBSERVE` | `readiness_observe` | observe Kubernetes readiness within a bounded deadline |
-| `RESPONSIVENESS_OBSERVE` | `responsiveness_observe` | observe service responsiveness with retry and timeout policy |
-| `OBSERVATION_PROJECT` | `observation_project` | project operational results into immutable observations |
-| `REASONING_BOUNDARY` | `reasoning_boundary` | hand observations across the boundary to the evaluator |
-| `NAMESPACE_CLEANUP` | `namespace_cleanup` | remove the run-scoped namespace under ownership |
+## Deeper Documentation
 
-These are operational lifecycle phases of the platform, not reasoning stages of an evaluator.
+- [docs/architecture.md](docs/architecture.md): Detailed component responsibilities, public package architecture, verified AWS demonstration harness architecture, sequence diagrams, and boundary contracts.
+- [docs/demo.md](docs/demo.md): Timed five-minute engineering walkthrough of orchestration, boundary validation, failure handling, and cleanup safety.
+- [docs/verification-matrix.md](docs/verification-matrix.md): Exhaustive matrix mapping every public architectural and operational claim to concrete verification evidence and boundaries.
+- [docs/aws-case-study.md](docs/aws-case-study.md): Sanitized deployment case study detailing the verified AWS EKS demonstration context.
+- [docs/public-demo-freeze.md](docs/public-demo-freeze.md): Auditable freeze record documenting verified run facts on AWS EKS (`ap-south-1`).
+- [docs/public-roadmap.md](docs/public-roadmap.md): Non-committed future capability horizons and core product boundaries.
 
-## Failure semantics
+## Development and Verification Commands
 
-Verified public behavior:
+The package requires Python >= 3.10.
 
-- a primary operational or boundary failure raises `VerificationCoordinationFailed` with the failed phase and the original exception;
-- when cleanup after a failure also fails, the cleanup exception is retained separately on `cleanup_failure`;
-- cleanup is attempted after applicable failures;
-- a successful evaluation followed by a cleanup failure raises `VerificationCleanupFailed`, preserving the produced knowledge, observations, and phase record;
-- evaluator absence surfaces as `ReasoningCoreNotProvided` inside `VerificationCoordinationFailed` at the `reasoning_boundary` phase.
-
-## Explore the Engineering
-
-- [Five-minute walkthrough](docs/demo.md): follow orchestration, boundary
-  validation, failure handling, and cleanup through executable tests.
-- [Verification matrix](docs/verification-matrix.md): map public claims to
-  evidence and understand their limits.
-- [AWS deployment case study](docs/aws-case-study.md): review a sanitized,
-  high-level deployment context and its separation from the public package.
-- [Architecture](docs/architecture.md): review component responsibilities
-  and the external evaluator boundary.
-- [Public capability roadmap](docs/public-roadmap.md): review the capability
-  horizons and the product boundaries that keep Brace focused.
-
-The walkthrough uses in-process test doubles. It does not restore a backup,
-contact a live cluster, or include a recoverability decision algorithm.
-
-## Installation
-
-The package metadata requires Python >= 3.10.
-
-```powershell
-python -m venv .venv
-.\.venv\Scripts\Activate.ps1
+```bash
+python3 -m venv .venv
+source .venv/bin/activate
 python -m pip install --upgrade pip
-python -m pip install -e ".[dev]"
+python -m pip install -c constraints.txt -e ".[dev]"
 ```
 
-## Verification
+Run the complete test suite:
 
-```powershell
+```bash
 python -m pytest tests -v -p no:cacheprovider
 ```
 
-Current verified local result: **42 tests passed on Python 3.14.6**.
+Current verified local result: **75 passed, 1 skipped on Python 3.14.6** (76 collected tests covering coordinator, composition, packaging, and live demo harness contracts).
 
-The public audit also verified packaging with:
+Verify distribution packaging:
 
-```powershell
+```bash
 python -m build
 ```
 
-This builds both wheel and source distribution; the audit confirmed their contents (no tests, no generated artifacts, no private references). Building distributions is not required to run the test suite.
+The distribution audit verifies that built wheels and source distributions contain only approved package modules and metadata, with no tests, no generated artifacts, and no credential markers.
 
-## Public-package limits
-
-- **Workload observation vs backup restoration**: The public implementation applies and observes a synthetic workload bundle; it does not implement backup restoration, volume snapshots, or database recovery.
-- **In-process fakes vs live clusters**: The public test suite runs entirely in-process against test doubles; it does not constitute live-cluster proof.
-- **Phase success vs observation outcome**: An operational phase recording success indicates only that the lifecycle step ran without infrastructure failure; it does not mean an affirmative observation or positive recoverability judgment was established.
-- **Cluster configuration**: Kubernetes external interactions require suitable runtime configuration (credentials and cluster access are intentionally not part of this repository).
-- **Evaluator boundary**: Reaching an authoritative recoverability conclusion requires an injected `RecoverabilityEvaluator`. The proprietary evaluator is intentionally not distributed.
-
-## Repository structure
+## Repository Structure
 
 ```
-src/brace/                 public platform package (src layout)
-src/brace/reasoning/       the public reasoning boundary contract
-tests/                     verification and packaging guard tests
-pyproject.toml             package metadata and tool configuration
-MANIFEST.in                source-distribution file selection
+src/brace/                 Public platform package (src layout)
+src/brace/reasoning/       External reasoning boundary protocol contract
+infra/terraform/           Standalone AWS VPC & EKS demonstration infrastructure
+scripts/live_demo.py       Standalone live AWS demonstration lifecycle runner
+workloads/demo-app/        Public demonstration workload manifests
+tests/                     Unit, composition, packaging, and live harness tests
+docs/                      Architecture, demo walkthrough, verification matrix, case studies
+docs/assets/               Architecture diagrams (PNG and Mermaid source)
+pyproject.toml             Package metadata and configuration
+MANIFEST.in                Source-distribution file selection
 ```
 
-## Engineering highlights
+## Current Status
 
-- **Deterministic identity** — namespaces and observations derive identities from run, event, and workload references.
-- **Immutable models** — frozen dataclasses and exact enumerations throughout the evidence path.
-- **Strict cross-field validation** — mismatched run, event, workload, ownership, bundle, port, replica, and digest references are rejected before any I/O.
-- **Dependency inversion** — the coordinator depends on adapter protocols and the evaluator protocol, not concrete infrastructure or decision logic.
-- **Ownership-safe cleanup** — deletion is scoped by ownership and run identity.
-- **Executable failure-path verification** — every phase failure path and both cleanup failure modes are covered by tests.
-- **Dependency-closed package** — a packaging guard proves declared runtime dependencies exactly match retained-module imports.
-
-## Interview walkthrough
-
-1. `_runtime_owned_request.py` — how an approved request is validated with strict cross-field invariants before any I/O.
-2. `_runtime_owned_composition.py` — the public entry point that wires adapters, observers, transport, and the optional evaluator into one coordinator.
-3. `_runtime_owned_verification.py` — the coordinator: exact phase sequencing, phase recording, boundary handoff, and cleanup semantics.
-4. `_operational_projection.py` — how operational check results are deterministically projected into immutable evidence records.
-5. `reasoning/boundary.py` — the one-directional contract between platform and evaluator, and what it deliberately does not expose.
-6. `tests/test_runtime_owned_composition.py` — composition-level tests including the real boundary path with and without an evaluator.
-7. `tests/test_runtime_owned_verification.py` — the authority-chain and failure-path tests with production-valid fakes.
-
-## Status
-
-This repository is a public platform implementation with an intentionally external reasoning component. No roadmap or unreleased features are listed here.
+- **Installable Package**: Baseline V1 complete, dependency-closed, tested against Python 3.10–3.14.
+- **Live AWS Demonstration**: Validated end-to-end on AWS EKS; milestone frozen; zero cloud residue confirmed.
+- **Execution Authority**: `main` branch is authoritative; no further AWS execution is authorized.
+- **Evaluator Decision**: *No production recoverability decision was made.*

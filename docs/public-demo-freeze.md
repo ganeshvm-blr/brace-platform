@@ -6,6 +6,7 @@
 - **Run ID**: `895844a6-afb2-45e1-a2c6-30c1229dc844`
 - **AWS Region**: `ap-south-1`
 - **Node Instance Type**: `t3.small`
+- **Architecture Reference**: [assets/brace-platform-architecture.png](assets/brace-platform-architecture.png)
 
 ---
 

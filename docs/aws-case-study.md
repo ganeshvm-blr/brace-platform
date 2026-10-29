@@ -1,59 +1,79 @@
 # AWS Deployment Case Study
 
-## Scope
+## Scope and Architecture Context
 
-This document provides a sanitized, high-level overview of an AWS deployment context for Brace Platform.
+This document provides a sanitized, architectural case study of the validated AWS demonstration harness for Brace Platform.
 
 Please note the following boundaries:
-- This is a sanitized deployment-context case study, not an operational runbook or deployment guide.
-- The public repository does not provision AWS infrastructure, execute Terraform, or automate cloud resources.
-- The public repository does not contain AWS credentials, cloud infrastructure automation, backup restoration logic, or production evaluator implementations.
+- **Demonstration Distinction**: The repository provides two separate surfaces:
+  1. The **installable public package (`brace`)**, which does not provision cloud resources and executes locally against in-process test doubles.
+  2. The **verified AWS demonstration harness (`scripts/live_demo.py` & `infra/terraform`)**, a standalone, explicitly invoked harness that provisions temporary Amazon Web Services (AWS) infrastructure to demonstrate real in-cluster observation.
+- **No Backup Restoration**: Neither the package nor the live AWS demonstration implements backup restoration, volume snapshots, storage recovery, or database replays.
+- **External Evaluator Boundary**: The production evaluator, scoring logic, and decision algorithms are external and omitted. The demonstration uses an illustrative test double returning fixed affirmed standing. *No production recoverability decision was made.*
+- **Sanitized Evidence**: All AWS account IDs, ARNs, VPC IDs, subnet IDs, security group IDs, NAT gateway IDs, KMS key IDs, and credentials are completely sanitized. Evidence is stored locally on disk and is **not** uploaded to Amazon S3.
+
+For visual architecture, see the [Architecture Overview](assets/brace-platform-architecture.png).
+
+---
 
 ## Engineering Question
 
-How can a temporary Kubernetes verification environment separate workload execution and observation from an external decision component?
+How can an automated verification harness separate cloud infrastructure orchestration and workload observation from an external recoverability evaluation component while guaranteeing zero residual cloud resources?
 
-In verification workflows, testing application availability requires deploying workloads to a cluster, observing health, and generating structured evidence for decision systems. The engineering challenge is isolating operational orchestration and infrastructure observation from the evaluation logic that decides whether recoverability has been demonstrated, while ensuring that the orchestration records cleanup attempts and preserves cleanup failures. This public repository demonstrates that separation of concerns without claiming to solve end-to-end disaster recovery.
+In disaster recovery and platform assurance, verifying application availability requires deploying workloads to a target cluster, observing convergence and responsiveness, and projecting structured evidence for evaluation. The core engineering challenges are:
+1. Isolating infrastructure execution and observation from decision-making logic.
+2. Collecting real operational signals (Kubernetes deployment readiness and in-cluster HTTP status codes) without proprietary agents.
+3. Guaranteeing deterministic teardown and proving zero cloud residue post-execution.
 
-## High-Level Deployment Context
+---
 
-In a representative cloud deployment, Brace Platform operates against standard managed cloud services:
+## Demonstration Infrastructure Context
 
-- **Amazon Elastic Container Registry (Amazon ECR)**: Serves as a source of container images pinned by cryptographic digest.
-- **Amazon Elastic Kubernetes Service (Amazon EKS)**: Acts as the target Kubernetes execution environment hosting the cluster runtime.
-- **Run-Scoped Kubernetes Namespace**: Created with unique ownership metadata for the duration of a verification exercise.
-- **Approved Workload Bundle**: Contains Deployment, Service, and ConfigMap definitions applied into the isolated namespace.
-- **Operational Observations**: Kubernetes readiness and HTTP endpoint responsiveness are sampled against bounded deadlines.
-- **External Evaluator Boundary**: Observed evidence is packaged into structured envelopes and presented across a defined protocol.
-- **Ownership-Scoped Cleanup Attempts**: The coordinator attempts ownership-scoped namespace deletion to clean up cluster resources.
+The standalone demonstration harness operates against standard AWS and container services:
+
+- **GitHub Container Registry (GHCR)**: Serves as the public container registry (`ghcr.io`) hosting digest-pinned workload and verifier images. (Amazon ECR is **not** used).
+- **Temporary AWS VPC**: Created via `infra/terraform` with 2 public subnets, 2 private subnets, and a single NAT gateway for outbound image pulling.
+- **Amazon Elastic Kubernetes Service (Amazon EKS)**: Managed Kubernetes control plane (Kubernetes 1.36) hosting an isolated execution environment.
+- **Managed Node Group**: Single `t3.small` instance (`FreeTierEligible=true`, `x86_64`) providing cluster compute.
+- **Run-Scoped Namespace**: Created with unique ownership metadata (`brace.platform/run-id`, `brace.platform/ownership-owner`) for the verification run.
+- **Approved Workload Bundle**: Standard Deployment, Service, and ConfigMap definitions applied into the isolated namespace.
+- **Operational Observations**: Real Kubernetes deployment readiness and in-cluster HTTP `200 OK` responsiveness gathered by an in-cluster verifier Job.
+- **External Evaluator Boundary**: Observed evidence delivered across the `RecoverabilityEvaluator` protocol.
+- **Zero-Residue Teardown**: Ownership-scoped Kubernetes cleanup, `terraform destroy` of all 22 cloud resources, and an independent AWS CLI residue audit.
+
+---
 
 ## Architecture and Boundary Diagram
 
 ```mermaid
 flowchart TD
-    subgraph AWS["AWS Deployment Context"]
-        ECR["Amazon ECR<br>(Container Image Registry)"]
-        EKS["Amazon EKS<br>(Kubernetes Cluster)"]
+    subgraph AWS["Temporary AWS Demonstration Environment"]
+        VPC["AWS VPC<br/>(Public & Private Subnets, NAT GW)"]
+        EKS["Amazon EKS Cluster<br/>(Managed Node Group: 1x t3.small)"]
+        VPC --> EKS
     end
 
-    subgraph Platform["Public Platform Responsibilities"]
-        NS["Run-Scoped Namespace"]
-        Bundle["Approved Workload Bundle<br>(Deployment, Service, ConfigMap)"]
-        Obs["Readiness & HTTP Observations"]
-        Proj["Immutable Operational Observations"]
-        Coord["Coordinator"]
-        Clean["Ownership-Scoped Cleanup Attempt"]
+    subgraph Registry["Container Registry (Public)"]
+        GHCR["GitHub Container Registry (ghcr.io)<br/>• Workload pinned by @sha256:588c07b2...<br/>• Verifier pinned by @sha256:d06d70a5..."]
+    end
+
+    subgraph Platform["Verified Demonstration Lifecycle"]
+        NS["Run-Scoped Namespace<br/>(run-<id>)"]
+        Bundle["Approved Workload Bundle<br/>(Deployment, Service, ConfigMap)"]
+        Obs["In-Cluster Verification<br/>• Kubernetes Readiness Observed<br/>• In-Cluster HTTP 200 OK Observed"]
+        Proj["Immutable Operational Evidence<br/>(Stored Locally in .demo/evidence/)"]
+        Teardown["Teardown & Residue Audit<br/>• Kubernetes Cleanup<br/>• Terraform Destroy (22 clean)<br/>• Residue Audit (0 active)"]
     end
 
     subgraph Boundary["Decision Boundary"]
         Protocol["RecoverabilityEvaluator Protocol"]
     end
 
-    subgraph External["External / Private Component"]
-        Evaluator["External Evaluator<br>(Decision Logic)"]
+    subgraph External["External Decision Component"]
+        Evaluator["Demonstration Verifier Double<br/>• Fixed Affirmed Standing<br/>• Production Evaluator EXCLUDED<br/>• No Production Decision Made"]
     end
 
-    ECR -.- EKS
+    GHCR -. pull by digest .-> EKS
     EKS --> NS
     NS --> Bundle
     Bundle --> Obs
@@ -61,81 +81,75 @@ flowchart TD
     Proj --> Protocol
     Protocol --> Evaluator
 
-    Coord --> Clean
-    Clean --> NS
+    Platform -. clean teardown .-> Teardown
 ```
 
-The visual groupings distinguish between:
-1. **AWS Deployment Context**: Cloud environment hosting the container registry and Kubernetes cluster runtime.
-2. **Public Platform Responsibilities**: In-cluster namespace lifecycle, workload application, readiness and HTTP observation, evidence projection, and ownership-scoped cleanup attempts.
-3. **Decision Boundary**: The one-way protocol contract separating evidence collection from decision making.
-4. **External Evaluator**: The decision logic that receives evidence and renders a recoverability conclusion.
+---
 
-## Public Package Responsibilities
+## Verified Demonstration Milestone Facts
 
-The public package provides the following capabilities:
+The public AWS demonstration lifecycle was executed, verified, and frozen on commit `e8329b6`:
 
-- **Executable verification coverage**: Coordinator sequencing, identity validation, boundary checks, failure preservation, timestamp behavior, and ownership-scoped cleanup attempts are covered by executable public tests.
-- **Inspectable platform implementation**: Kubernetes namespace, workload, readiness, responsiveness, and HTTP transport capabilities are present as inspectable public implementation, while coordinator tests substitute adapters and observers with in-process doubles.
-- **Request and identity validation**: Validates run, event, workload, ownership, port, replica, and digest references before invoking any adapter.
-- **Namespace lifecycle orchestration**: Sequences namespace creation, workload deployment, evidence gathering, and namespace deletion.
-- **Workload application and inspection**: Applies and inspects the expected Deployment, Service, and ConfigMap resources.
-- **Bounded readiness observation**: Samples Kubernetes deployment readiness against a configurable deadline.
-- **Bounded HTTP responsiveness observation**: Probes application HTTP endpoints using structured retry and timeout policies.
-- **Deterministic observation projection**: Converts check results into immutable frozen dataclass records with deterministic IDs.
-- **Evaluator delegation**: Packages observations into an `EvaluationRequest` and passes them to the injected evaluator protocol.
-- **Failure preservation**: Captures primary phase exceptions, ensures cleanup failure does not overwrite primary errors, and preserves generated knowledge if cleanup fails after evaluation.
-- **Ownership-scoped cleanup attempts**: Attempts ownership-scoped namespace deletion after both successful runs and operational failures.
+| Dimension | Verified Fact |
+|---|---|
+| **Status** | `PUBLIC AWS LIFECYCLE PASS` |
+| **Milestone** | Verified Public Demonstration Lifecycle |
+| **Commit** | `e8329b6d2150e1bcba787d96aa8e4dd238561c49` |
+| **Run ID** | `895844a6-afb2-45e1-a2c6-30c1229dc844` |
+| **AWS Region** | `ap-south-1` |
+| **Node Instance Type** | `t3.small` |
+| **Workload Image** | `ghcr.io/ganeshvm-blr/brace-platform-demo-workload@sha256:588c07b235103a9f73d5f069418c1b1e2966c57245fd4be4bab8658053a5650a` |
+| **Verifier Image** | `ghcr.io/ganeshvm-blr/brace-platform-verifier@sha256:d06d70a5b892705ad537f05eb246d8171cc236d52310912b800789bc84509fc8` |
+| **Readiness Observation** | Deployment `demo-workload` converged to ready status (`PASS`) |
+| **Responsiveness Observation** | In-cluster HTTP GET returned status `200 OK` (`PASS`) |
+| **Kubernetes Cleanup** | Namespace, Job, ConfigMap, ServiceAccount, and RBAC deleted (`PASS`) |
+| **Terraform Teardown** | 22 resources cleanly destroyed with 0 errors (`PASS`) |
+| **Residue Audit** | Independent audit confirmed 0 surviving run-owned AWS resources (`CLEAN`) |
+| **Evidence Location** | `.demo/evidence/895844a6-afb2-45e1-a2c6-30c1229dc844/` (local disk only) |
 
-## External or Private Responsibilities
+See [docs/public-demo-freeze.md](public-demo-freeze.md) for the complete auditable record.
 
-The following functions are external to the public platform repository:
+---
 
-- **AWS infrastructure provisioning**: Cloud networking, compute clusters, and managed services.
-- **Container publication**: Building container images, vulnerability scanning, and publishing images to Amazon ECR.
-- **Backup creation and restoration**: Snapshot management, database dumps, volume restores, and replication jobs.
-- **Storage and database recovery**: Restoring physical volumes, replaying transaction logs, or validating persistent database state.
-- **Production evaluator implementation**: Proprietary decision engines, inference rules, and recoverability evaluation algorithms.
-- **Evidence interpretation and decision logic**: Business logic determining whether observed evidence satisfies organizational recovery standards.
-- **Environment credentials and runtime configuration**: Cloud provider credentials, cluster access configurations, and authentication tokens.
+## Separation of Concerns: Package vs AWS Demonstration
 
-## Evidence Boundary
+| Dimension | Installable Package (`brace`) | Verified AWS Demonstration Harness |
+|---|---|---|
+| **Source Directory** | `src/brace/` | `infra/terraform/` & `scripts/live_demo.py` |
+| **Cloud Provisioning** | None (does not provision AWS) | Provisions temporary VPC and EKS |
+| **Kubernetes API** | Abstracted via adapter protocol | Real Amazon EKS Control Plane |
+| **Observation Medium** | In-process test doubles | In-cluster Job and real HTTP probe |
+| **Evidence Output** | In-memory frozen dataclasses | Written to `.demo/evidence/<run-id>/` |
+| **Cloud Residue** | None (in-memory execution) | Independently audited zero residue |
+| **Evaluator Contract** | `RecoverabilityEvaluator` protocol | `RecoverabilityEvaluator` protocol |
+| **Production Evaluator** | Excluded | Excluded |
+| **Backup Restoration** | Excluded | Excluded |
 
-It is important to maintain an exact distinction between local verification evidence and cloud deployment context:
-
-- **In-process test doubles**: Public unit tests exercise coordinator state transitions, failure handling, and boundary handoffs using test doubles. They do not connect to Amazon EKS or test live AWS infrastructure.
-- **Packaging and boundary gates**: Public CI workflows verify Python package metadata, dependency closure, module allowlists, and distribution content hygiene.
-- **Deployment context**: The architecture diagrams and AWS service references in this case study provide contextual orientation for how the platform operates inside cloud environments; they do not represent automated provisioning code in this repository.
-- **Absence of live cloud evidence**: This document does not present live cloud benchmark logs, execution metrics from running AWS clusters, or production recovery certifications.
+---
 
 ## What This Case Study Does Not Claim
 
 This case study explicitly excludes the following claims:
-
-- It does not claim live AWS provisioning proof or cluster infrastructure automation.
-- It does not claim backup restoration proof, snapshot replay, or storage recovery.
-- It does not claim database consistency, data integrity validation, or volume durability.
-- It does not claim compliance with Recovery Time Objectives (RTO) or Recovery Point Objectives (RPO).
-- It does not claim multi-region failover automation or cross-region replication.
-- It does not claim performance benchmarking, scale limits, or load test certification.
+- It does not claim backup restoration, snapshot replay, or storage recovery.
+- It does not claim database consistency, state persistence, or transaction log recovery.
+- It does not claim Recovery Time Objective (RTO) or Recovery Point Objective (RPO) compliance.
+- It does not claim multi-region disaster recovery or cross-region replication.
+- It does not claim load testing, throughput benchmarking, or scale certification.
 - It does not claim mathematical or operational correctness of external evaluators.
-- It does not claim universal recoverability guarantees or automated disaster recovery.
+- It does not claim that a production recoverability decision was made.
 
-## Interview Discussion Points
+---
 
-Five key architecture topics relevant to this system design:
+## Interview Discussion Topics
 
-1. **Separation of orchestration from evaluation**:
-   Decoupling workload observation from the decision engine allows the platform to remain auditable, portable, and inspectable, while proprietary assessment models remain independent, substitutable components.
+1. **Decoupling Orchestration from Evaluation**:
+   Separating workload execution and observation from decision logic ensures that platform infrastructure code remains inspectable and auditable, while decision heuristics remain independent and substitutable.
 
-2. **Run-scoped namespace isolation**:
-   Isolating each verification exercise within a run-scoped namespace bounded by deterministic run identifiers prevents cross-run contamination and enables safe, targeted resource deletion.
+2. **Supply-Chain Digest Pinning**:
+   Requiring strict `@sha256:` hexadecimal digest pinning guarantees that workloads executed in cluster environments match exactly the audited build artifacts, eliminating mutable tag vulnerabilities.
 
-3. **Phase execution success vs observation outcome**:
-   An operational phase completing with `succeeded=True` indicates only that the orchestration step ran without infrastructure failure. It does not mean that the observed workload satisfied functional or recoverability criteria.
+3. **In-Cluster Responsiveness vs Manifest Application**:
+   Proving that a deployment converged and its service responded with HTTP status 200 provides operational certainty that simple manifest application cannot offer.
 
-4. **Preservation of primary failures alongside cleanup errors**:
-   If an operational check fails and subsequent namespace deletion also fails, the coordinator preserves the primary error as the principal cause while retaining the cleanup error. This avoids masking root causes during troubleshooting.
-
-5. **Separation of public platform engineering from private decision IP**:
-   Open-sourcing runtime execution, observation gathering, and boundary contracts enables community review of infrastructure code without disclosing proprietary decision heuristics or internal assessment models.
+4. **Fail-Closed Teardown and Independent Residue Auditing**:
+   Combining automated Terraform destruction with an out-of-band AWS CLI residue audit ensures that transient demonstration infrastructure leaves zero orphaned cloud assets.
